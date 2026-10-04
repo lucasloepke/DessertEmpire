@@ -16,7 +16,7 @@ RoadService.tileAlongStreet()
 DataService.bindAutoSave(60)
 
 local function onPlayerAdded(player: Player)
-	-- Join order: load data → assign plot → build station → LoadCharacter.
+	-- Join order: load data → assign plot → build stations → LoadCharacter.
 	-- A hang anywhere before LoadCharacter leaves the player on a grey screen.
 	local loadOk, data = DataService.load(player)
 	if not loadOk then
@@ -36,8 +36,7 @@ local function onPlayerAdded(player: Player)
 		return
 	end
 
-	local stand = StandService.build(player, plot, data or DataService.get(player))
-	if stand then
+	for _, stand in ipairs(StandService.build(player, plot, data or DataService.get(player))) do
 		StationService.attach(player, stand)
 	end
 

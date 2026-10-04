@@ -32,6 +32,11 @@ PLOT = dict(
     PadHeight=1,
     # Pad center Y so the pad bottom sits on the grass top (Y=0).
     PadY=0.5,
+    # Spawn on the street/sidewalk strip, facing into the plot.
+    # Inset = studs from street edge toward street center.
+    SidewalkInset=6,
+    # ROAD["Y"] (0.25) + half of the 1-stud SpawnLocation height.
+    SpawnY=0.75,
     # Vacant pads match the grass baseplate; runtime flips to Claimed on assign.
     VacantColor=(75, 154, 68),
     ClaimedColor=(220, 200, 160),
@@ -331,7 +336,8 @@ def build_plots_tree(road_segments_path: Path | None):
         depth = PLOT["Depth"]
         edge = PLOT["StreetHalfWidth"]
         zc = edge + depth / 2
-        sz = edge + 6
+        # Sidewalk: on the street side of the plot edge, facing into the plot (+Z).
+        sz = edge - PLOT["SidewalkInset"]
         plots[f"Plot {idx}"] = {
             CN: "Model",
             "Pad": {
@@ -349,7 +355,7 @@ def build_plots_tree(road_segments_path: Path | None):
                 PR: part_props(
                     (163, 162, 165),
                     (8, 1, 8),
-                    (x, PLOT["PadY"], sz),
+                    (x, PLOT["SpawnY"], sz),
                     yaw_degrees=180,
                     CanCollide=False,
                     Duration=0,
@@ -365,7 +371,8 @@ def build_plots_tree(road_segments_path: Path | None):
         depth = PLOT["Depth"]
         edge = PLOT["StreetHalfWidth"]
         zc = -(edge + depth / 2)
-        sz = -(edge + 6)
+        # Sidewalk: on the street side of the plot edge, facing into the plot (-Z).
+        sz = -(edge - PLOT["SidewalkInset"])
         plots[f"Plot {idx}"] = {
             CN: "Model",
             "Pad": {
@@ -383,7 +390,7 @@ def build_plots_tree(road_segments_path: Path | None):
                 PR: part_props(
                     (163, 162, 165),
                     (8, 1, 8),
-                    (x, PLOT["PadY"], sz),
+                    (x, PLOT["SpawnY"], sz),
                     yaw_degrees=0,
                     CanCollide=False,
                     Duration=0,

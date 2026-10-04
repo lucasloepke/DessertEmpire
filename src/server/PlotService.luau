@@ -187,7 +187,7 @@ function PlotService.moveCharacterToPlot(player: Player)
 		return
 	end
 
-	-- Stand on top of the spawn brick, facing its LookVector (into the plot).
+	-- Stand on top of the sidewalk spawn, facing its LookVector (into the plot).
 	local target = spawn.CFrame + Vector3.new(0, 3, 0)
 	character:PivotTo(target)
 end

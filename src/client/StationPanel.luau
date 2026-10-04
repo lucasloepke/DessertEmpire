@@ -157,34 +157,46 @@ function StationPanel.start(onSale: (BasePart) -> (), onUpgrade: ((BasePart) -> 
 	local affordableColor = TycoonConfig.Interact.Button.Colors.Cyan
 	local unaffordableColor = Color3.fromRGB(130, 130, 135)
 
+	-- Every station model on our plot → its counter + sound connections.
+	-- The one panel follows whichever counter is nearest within range.
+	local tracked: { [Model]: { counter: BasePart, connections: { RBXScriptConnection } } } = {}
 	local stand: Model? = nil
 	local counter: BasePart? = nil
-	local standConnections: { RBXScriptConnection } = {}
+	local plotConnections: { RBXScriptConnection } = {}
 
-	local function setStand(newStand: Instance?)
-		for _, connection in standConnections do
+	local function untrack(model: Model)
+		local entry = tracked[model]
+		if not entry then
+			return
+		end
+		for _, connection in entry.connections do
 			connection:Disconnect()
 		end
-		table.clear(standConnections)
-		stand, counter = nil, nil
-		gui.Adornee = nil
+		tracked[model] = nil
+		if stand == model then
+			stand, counter = nil, nil
+			gui.Adornee = nil
+		end
+	end
 
-		if not (newStand and newStand:IsA("Model")) then
+	local function track(child: Instance)
+		if not (child:IsA("Model") and child:GetAttribute("StationId")) or tracked[child] then
 			return
 		end
-		local c = newStand:FindFirstChild("Counter")
-		if not (c and c:IsA("BasePart")) then
+		local c = child:WaitForChild("Counter", 10)
+		assert(c and c:IsA("BasePart"), "Missing Counter part on station " .. child:GetFullName())
+		if tracked[child] or child.Parent == nil then
 			return
 		end
-		stand, counter = newStand, c
-		gui.Adornee = c
+		local connections = {}
+		tracked[child] = { counter = c, connections = connections }
 
 		-- Only count increases, so the initial 0 on join doesn't play a sound.
-		local lastSaleCount = newStand:GetAttribute("SaleCount") or 0
+		local lastSaleCount = child:GetAttribute("SaleCount") or 0
 		table.insert(
-			standConnections,
-			newStand:GetAttributeChangedSignal("SaleCount"):Connect(function()
-				local count = newStand:GetAttribute("SaleCount") or 0
+			connections,
+			child:GetAttributeChangedSignal("SaleCount"):Connect(function()
+				local count = child:GetAttribute("SaleCount") or 0
 				if count > lastSaleCount then
 					onSale(c)
 				end
@@ -193,11 +205,11 @@ function StationPanel.start(onSale: (BasePart) -> (), onUpgrade: ((BasePart) -> 
 		)
 
 		if onUpgrade then
-			local lastUpgradeCount = newStand:GetAttribute("UpgradeCount") or 0
+			local lastUpgradeCount = child:GetAttribute("UpgradeCount") or 0
 			table.insert(
-				standConnections,
-				newStand:GetAttributeChangedSignal("UpgradeCount"):Connect(function()
-					local count = newStand:GetAttribute("UpgradeCount") or 0
+				connections,
+				child:GetAttributeChangedSignal("UpgradeCount"):Connect(function()
+					local count = child:GetAttribute("UpgradeCount") or 0
 					if count > lastUpgradeCount then
 						onUpgrade(c)
 					end
@@ -207,22 +219,47 @@ function StationPanel.start(onSale: (BasePart) -> (), onUpgrade: ((BasePart) -> 
 		end
 	end
 
-	local function bindStationValue(child: Instance)
-		if child.Name ~= "Station" or not child:IsA("ObjectValue") then
+	local function setPlot(plot: Instance?)
+		for _, connection in plotConnections do
+			connection:Disconnect()
+		end
+		table.clear(plotConnections)
+		for model in tracked do
+			untrack(model)
+		end
+		if not plot then
 			return
 		end
-		setStand(child.Value)
+		for _, child in ipairs(plot:GetChildren()) do
+			track(child)
+		end
+		table.insert(plotConnections, plot.ChildAdded:Connect(track))
+		table.insert(
+			plotConnections,
+			plot.ChildRemoved:Connect(function(child)
+				if child:IsA("Model") then
+					untrack(child)
+				end
+			end)
+		)
+	end
+
+	local function bindPlotValue(child: Instance)
+		if child.Name ~= "Plot" or not child:IsA("ObjectValue") then
+			return
+		end
+		setPlot(child.Value)
 		child.Changed:Connect(function()
-			setStand(child.Value)
+			setPlot(child.Value)
 		end)
 	end
 
-	-- The server creates Player.Station during join, possibly after this runs.
-	local existing = player:FindFirstChild("Station")
+	-- The server creates Player.Plot during join, possibly after this runs.
+	local existing = player:FindFirstChild("Plot")
 	if existing then
-		bindStationValue(existing)
+		bindPlotValue(existing)
 	end
-	player.ChildAdded:Connect(bindStationValue)
+	player.ChildAdded:Connect(bindPlotValue)
 
 	bar.Activated:Connect(function()
 		if not stand or stand:GetAttribute("Automated") == true then
@@ -251,8 +288,20 @@ function StationPanel.start(onSale: (BasePart) -> (), onUpgrade: ((BasePart) -> 
 		local character = player.Character
 		local root = character and character:FindFirstChild("HumanoidRootPart")
 		local near = false
-		if counter and root and root:IsA("BasePart") then
-			near = (root.Position - counter.Position).Magnitude <= TycoonConfig.StationInteractDistance
+		if root and root:IsA("BasePart") then
+			local nearest, nearestDistance = nil, TycoonConfig.StationInteractDistance
+			for model, entry in tracked do
+				local distance = (root.Position - entry.counter.Position).Magnitude
+				if distance <= nearestDistance then
+					nearest, nearestDistance = model, distance
+				end
+			end
+			-- Keep the last stand while fading out so the panel doesn't blank mid-fade.
+			if nearest and nearest ~= stand then
+				stand, counter = nearest, tracked[nearest].counter
+				gui.Adornee = counter
+			end
+			near = nearest ~= nil
 		end
 
 		local target = if near then 0 else 1

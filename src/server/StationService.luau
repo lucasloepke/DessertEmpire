@@ -1,7 +1,7 @@
 -- Server-authoritative station loop: SELL → bar runs duration → pays payout.
 -- Automation is the same loop restarting itself the moment a cycle completes.
--- Spend flow per station: panel UPGRADE (repeatable, via remote) and
--- physical upgrades (in order, via the walk-on floor button).
+-- Spend flow per station: panel UPGRADE (repeatable, via remote), physical
+-- upgrades and the next tier's unlock (via walk-on floor buttons).
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Workspace = game:GetService("Workspace")
@@ -26,7 +26,13 @@ type State = {
 	token: number,
 }
 
-local states: { [Player]: State } = {}
+-- Every attached station on the player's plot, keyed by station id.
+local states: { [Player]: { [string]: State } } = {}
+
+local function isCurrent(player: Player, state: State): boolean
+	local playerStates = states[player]
+	return playerStates ~= nil and playerStates[state.config.Id] == state
+end
 
 local function stationData(player: Player, stationId: string)
 	local data = DataService.get(player)
@@ -62,7 +68,7 @@ local function beginCycle(player: Player, state: State)
 	state.stand:SetAttribute("CycleEndsAt", now + duration)
 
 	task.delay(duration, function()
-		if states[player] == state and state.token == token then
+		if isCurrent(player, state) and state.token == token then
 			completeCycle(player, state)
 		end
 	end)
@@ -103,9 +109,10 @@ local function onStationAction(player: Player, action: any, stationId: any)
 		return
 	end
 
-	-- Ownership: a player only ever has state for the stand on their own plot.
-	local state = states[player]
-	if not state or state.config.Id ~= stationId then
+	-- Ownership: a player only ever has state for stands on their own plot.
+	local playerStates = states[player]
+	local state = playerStates and playerStates[stationId]
+	if not state then
 		return
 	end
 
@@ -153,12 +160,35 @@ local function buyPhysical(player: Player, state: State, upgradeId: string): boo
 	station.owned[upgrade.Id] = true
 	DataService.markDirty(player)
 	syncAttributes(state, station)
-	StandService.refresh(player)
+	StandService.refresh(player, true)
 	noteUpgrade(state)
 
 	-- A running manual cycle chains into automation when it completes.
 	if upgrade.Automates and not state.busy then
 		beginCycle(player, state)
+	end
+	return true
+end
+
+-- The unlock button lives on the previous station (state), and is only valid
+-- while that station is offering this exact tier.
+local function buyUnlock(player: Player, state: State, targetId: string): boolean
+	local data = DataService.get(player)
+	if not data then
+		return false
+	end
+	local target = StationMath.nextUnlock(state.config, data)
+	if not target or target.Id ~= targetId or not DataService.trySpend(player, target.UnlockCost) then
+		return false
+	end
+
+	data.stations[target.Id].unlocked = true
+	DataService.markDirty(player)
+	noteUpgrade(state)
+
+	local stand = StandService.buildStation(player, target.Id)
+	if stand then
+		StationService.attach(player, stand)
 	end
 	return true
 end
@@ -194,7 +224,7 @@ local function bindButton(player: Player, state: State, button: Model, onPress: 
 		armed = false
 		task.spawn(function()
 			local rearmDistance = TycoonConfig.Interact.Button.RearmDistance
-			while states[player] == state and button.Parent and player.Character == character do
+			while isCurrent(player, state) and button.Parent and player.Character == character do
 				local root = character:FindFirstChild("HumanoidRootPart")
 				if not (root and root:IsA("BasePart")) then
 					break
@@ -216,21 +246,30 @@ local function bindButton(player: Player, state: State, button: Model, onPress: 
 	end
 end
 
-local function bindPhysicalButton(player: Player, state: State, button: Model)
-	if button:GetAttribute("Kind") ~= "PhysicalUpgrade" then
-		return
-	end
-	local upgradeId = button:GetAttribute("UpgradeId")
-	if typeof(upgradeId) ~= "string" then
-		return
-	end
+local function bindPurchaseButton(player: Player, state: State, button: Model)
 	if button:GetAttribute("Bound") == true then
 		return
 	end
-	button:SetAttribute("Bound", true)
-	bindButton(player, state, button, function()
-		return buyPhysical(player, state, upgradeId)
-	end)
+	local kind = button:GetAttribute("Kind")
+	if kind == "PhysicalUpgrade" then
+		local upgradeId = button:GetAttribute("UpgradeId")
+		if typeof(upgradeId) ~= "string" then
+			return
+		end
+		button:SetAttribute("Bound", true)
+		bindButton(player, state, button, function()
+			return buyPhysical(player, state, upgradeId)
+		end)
+	elseif kind == "StationUnlock" then
+		local targetId = button:GetAttribute("StationId")
+		if typeof(targetId) ~= "string" then
+			return
+		end
+		button:SetAttribute("Bound", true)
+		bindButton(player, state, button, function()
+			return buyUnlock(player, state, targetId)
+		end)
+	end
 end
 
 function StationService.init()
@@ -248,8 +287,6 @@ function StationService.init()
 end
 
 function StationService.attach(player: Player, stand: Model)
-	StationService.detach(player)
-
 	local config = StationMath.findStation(stand:GetAttribute("StationId") or "")
 	local counter = stand:FindFirstChild("Counter")
 	local station = config and stationData(player, config.Id)
@@ -265,7 +302,12 @@ function StationService.attach(player: Player, stand: Model)
 		busy = false,
 		token = 0,
 	}
-	states[player] = state
+	local playerStates = states[player]
+	if not playerStates then
+		playerStates = {}
+		states[player] = playerStates
+	end
+	playerStates[config.Id] = state
 
 	stand:SetAttribute("DisplayName", config.DisplayName)
 	stand:SetAttribute("SaleCount", 0)
@@ -276,12 +318,12 @@ function StationService.attach(player: Player, stand: Model)
 
 	for _, child in ipairs(stand:GetChildren()) do
 		if child:IsA("Model") then
-			bindPhysicalButton(player, state, child)
+			bindPurchaseButton(player, state, child)
 		end
 	end
 	stand.ChildAdded:Connect(function(child)
-		if states[player] == state and child:IsA("Model") then
-			bindPhysicalButton(player, state, child)
+		if isCurrent(player, state) and child:IsA("Model") then
+			bindPurchaseButton(player, state, child)
 		end
 	end)
 

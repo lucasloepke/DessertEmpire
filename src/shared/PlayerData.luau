@@ -55,6 +55,9 @@ local function sanitizeStation(stationConfig: any, raw: any, isStarter: boolean)
 	for _, upgrade in ipairs(stationConfig.Physical) do
 		if rawOwned[upgrade.Id] == true then
 			station.owned[upgrade.Id] = true
+		elseif upgrade.Id == "Cashier" and rawOwned.StandHelper == true then
+			-- Renamed StandHelper → Cashier.
+			station.owned[upgrade.Id] = true
 		elseif upgrade.Automates and raw.automated == true then
 			-- v1 automation → own the employee.
 			station.owned[upgrade.Id] = true

@@ -27,8 +27,8 @@ local function corner(parent: GuiObject, radius: UDim)
 end
 
 function Hud.start(options: {
-	isMusicMuted: (() -> boolean)?,
-	toggleMusicMute: (() -> boolean)?,
+	getMusicVolume: (() -> number)?,
+	setMusicVolume: ((number) -> ())?,
 }?)
 	local player = Players.LocalPlayer
 	local playerGui = player:WaitForChild("PlayerGui", 10)
@@ -80,59 +80,138 @@ function Hud.start(options: {
 	amount.Parent = frame
 	stroke(amount, 2)
 
-	if options and options.toggleMusicMute and options.isMusicMuted then
-		local mute = Instance.new("TextButton")
-		mute.Name = "MuteMusic"
-		mute.AnchorPoint = Vector2.new(1, 1)
-		mute.Position = UDim2.new(1, -16, 1, -16)
-		mute.Size = UDim2.fromOffset(52, 52)
-		mute.BackgroundColor3 = Color3.fromRGB(30, 30, 36)
-		mute.BackgroundTransparency = 0.1
-		mute.AutoButtonColor = true
-		mute.Text = "♪"
-		mute.TextColor3 = Color3.new(1, 1, 1)
-		mute.TextSize = 26
-		mute.Font = Enum.Font.GothamBold
-		mute.Parent = gui
-		corner(mute, UDim.new(0, 12))
-		stroke(mute, 2.5, Enum.ApplyStrokeMode.Border)
+	if options and options.getMusicVolume and options.setMusicVolume then
+		local UserInputService = game:GetService("UserInputService")
 
-		local function refreshMute()
-			local muted = options.isMusicMuted()
-			mute.Text = if muted then "OFF" else "♪"
-			mute.TextSize = if muted then 16 else 26
-			mute.TextTransparency = if muted then 0.15 else 0
-			mute.BackgroundColor3 = if muted then Color3.fromRGB(55, 40, 40) else Color3.fromRGB(30, 30, 36)
+		local box = Instance.new("Frame")
+		box.Name = "MusicVolume"
+		box.AnchorPoint = Vector2.new(1, 1)
+		box.Position = UDim2.new(1, -16, 1, -16)
+		box.Size = UDim2.fromOffset(52, 52)
+		box.BackgroundColor3 = Color3.fromRGB(30, 30, 36)
+		box.BackgroundTransparency = 0.1
+		box.Active = true
+		box.ClipsDescendants = true
+		box.Parent = gui
+		corner(box, UDim.new(0, 12))
+		stroke(box, 2.5, Enum.ApplyStrokeMode.Border)
+
+		local fill = Instance.new("Frame")
+		fill.Name = "Fill"
+		fill.AnchorPoint = Vector2.new(0.5, 1)
+		fill.Position = UDim2.fromScale(0.5, 1)
+		fill.Size = UDim2.fromScale(1, 1)
+		fill.BackgroundColor3 = Color3.fromRGB(90, 200, 120)
+		fill.BackgroundTransparency = 0.25
+		fill.BorderSizePixel = 0
+		fill.ZIndex = 1
+		fill.Parent = box
+
+		local note = Instance.new("TextLabel")
+		note.Name = "Note"
+		note.BackgroundTransparency = 1
+		note.Size = UDim2.fromScale(1, 1)
+		note.ZIndex = 2
+		note.Text = "♪"
+		note.TextColor3 = Color3.new(1, 1, 1)
+		note.TextSize = 22
+		note.Font = Enum.Font.GothamBold
+		note.Parent = box
+		stroke(note, 2)
+
+		local function refreshFill()
+			local level = math.clamp(options.getMusicVolume(), 0, 1)
+			fill.Size = UDim2.fromScale(1, level)
+			note.TextTransparency = if level <= 0.001 then 0.45 else 0
 		end
 
-		mute.Activated:Connect(function()
-			options.toggleMusicMute()
-			refreshMute()
+		local function volumeFromY(screenY: number)
+			local top = box.AbsolutePosition.Y
+			local height = box.AbsoluteSize.Y
+			if height <= 0 then
+				return 0
+			end
+			-- Top of box = 1, bottom = 0.
+			return math.clamp(1 - (screenY - top) / height, 0, 1)
+		end
+
+		local dragging = false
+		local function setFromInput(input: InputObject)
+			options.setMusicVolume(volumeFromY(input.Position.Y))
+			refreshFill()
+		end
+
+		box.InputBegan:Connect(function(input)
+			if
+				input.UserInputType == Enum.UserInputType.MouseButton1
+				or input.UserInputType == Enum.UserInputType.Touch
+			then
+				dragging = true
+				setFromInput(input)
+			end
 		end)
-		refreshMute()
+
+		UserInputService.InputChanged:Connect(function(input)
+			if not dragging then
+				return
+			end
+			if
+				input.UserInputType == Enum.UserInputType.MouseMovement
+				or input.UserInputType == Enum.UserInputType.Touch
+			then
+				setFromInput(input)
+			end
+		end)
+
+		UserInputService.InputEnded:Connect(function(input)
+			if
+				input.UserInputType == Enum.UserInputType.MouseButton1
+				or input.UserInputType == Enum.UserInputType.Touch
+			then
+				dragging = false
+			end
+		end)
+
+		refreshFill()
 	end
 
 	local function popGain(gain: number)
+		local boxWidth = frame.Size.X.Offset
+		local startX = math.random(16, math.max(16, boxWidth - 16))
+
 		local popup = Instance.new("TextLabel")
 		popup.Name = "Gain"
 		popup.BackgroundTransparency = 1
-		popup.AnchorPoint = Vector2.new(0, 1)
-		popup.Position = UDim2.new(0, 76, 0.5, -30)
-		popup.Size = UDim2.fromOffset(160, 30)
-		popup.TextXAlignment = Enum.TextXAlignment.Left
+		popup.AnchorPoint = Vector2.new(0.5, 1)
+		popup.Position = UDim2.fromOffset(startX, 4)
+		popup.Size = UDim2.fromOffset(120, 28)
+		popup.TextXAlignment = Enum.TextXAlignment.Center
 		popup.Text = "+" .. Format.cash(gain)
 		popup.TextColor3 = MONEY_GREEN
 		popup.TextSize = 24
 		popup.Font = Enum.Font.GothamBold
-		popup.Parent = gui
-		stroke(popup, 2)
+		popup.ZIndex = 5
+		popup.Parent = frame
 
-		local info = TweenInfo.new(0.9, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
-		TweenService:Create(popup, info, {
-			Position = popup.Position - UDim2.fromOffset(0, 40),
+		local outline = Instance.new("UIStroke")
+		outline.Thickness = 2
+		outline.Color = Color3.new(0, 0, 0)
+		outline.Parent = popup
+
+		local hold = 0.5
+		local fade = 0.9
+		local riseInfo = TweenInfo.new(hold + fade, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+		local fadeInfo = TweenInfo.new(fade, Enum.EasingStyle.Quad, Enum.EasingDirection.Out, 0, false, hold)
+		TweenService:Create(popup, riseInfo, {
+			Position = UDim2.fromOffset(startX, -44),
+		}):Play()
+		TweenService:Create(popup, fadeInfo, {
 			TextTransparency = 1,
 		}):Play()
-		task.delay(info.Time, function()
+		TweenService:Create(outline, fadeInfo, {
+			Transparency = 1,
+		}):Play()
+		task.delay(hold + fade, function()
 			popup:Destroy()
 		end)
 

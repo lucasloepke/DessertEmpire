@@ -90,6 +90,37 @@ function StationMath.nextPhysical(config: any, station: any)
 	return StationMath.availablePhysical(config, station)[1]
 end
 
+--[[
+	The next tier this station offers to unlock, or nil. Offered once this
+	station is unlocked, owns every UnlockRequires id, and the next tier is
+	still locked and buildable (has a Placement).
+	data = the player's whole save.
+]]
+function StationMath.nextUnlock(config: any, data: any)
+	local nextConfig = nil
+	for index, entry in ipairs(TycoonConfig.Stations) do
+		if entry.Id == config.Id then
+			nextConfig = TycoonConfig.Stations[index + 1]
+			break
+		end
+	end
+	if not (nextConfig and nextConfig.Placement) then
+		return nil
+	end
+
+	local station = data.stations[config.Id]
+	local nextStation = data.stations[nextConfig.Id]
+	if not (station and station.unlocked and nextStation and not nextStation.unlocked) then
+		return nil
+	end
+	for _, id in ipairs(nextConfig.UnlockRequires or {}) do
+		if station.owned[id] ~= true then
+			return nil
+		end
+	end
+	return nextConfig
+end
+
 -- Short effect line for holograms: "x2 sales", "x2 sell speed", ...
 function StationMath.describeEffect(config: any, upgrade: any): string
 	if upgrade.Automates then

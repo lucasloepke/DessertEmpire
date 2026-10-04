@@ -105,10 +105,20 @@ function AdminHud.start()
 		2,
 		Color3.fromRGB(40, 140, 50)
 	)
-	local reset = makeButton(panel, "ResetProgress", "Reset Progress", 3, Color3.fromRGB(170, 55, 55))
+	local addCashLarge = makeButton(
+		panel,
+		"AddCashLarge",
+		"+" .. Format.cash(TycoonConfig.Admin.AddCashAmountLarge),
+		3,
+		Color3.fromRGB(40, 140, 50)
+	)
+	local reset = makeButton(panel, "ResetProgress", "Reset Progress", 4, Color3.fromRGB(170, 55, 55))
 
 	addCash.Activated:Connect(function()
 		adminAction:FireServer("AddCash")
+	end)
+	addCashLarge.Activated:Connect(function()
+		adminAction:FireServer("AddCashLarge")
 	end)
 	reset.Activated:Connect(function()
 		adminAction:FireServer("ResetProgress")

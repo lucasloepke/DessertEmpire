@@ -55,8 +55,7 @@ local function resetProgress(player: Player)
 		return
 	end
 
-	local stand = StandService.build(player, plot, data)
-	if stand then
+	for _, stand in ipairs(StandService.build(player, plot, data)) do
 		StationService.attach(player, stand)
 	end
 end
@@ -69,6 +68,8 @@ local function onAdminAction(player: Player, action: any)
 		resetProgress(player)
 	elseif action == "AddCash" then
 		DataService.addCash(player, TycoonConfig.Admin.AddCashAmount)
+	elseif action == "AddCashLarge" then
+		DataService.addCash(player, TycoonConfig.Admin.AddCashAmountLarge)
 	end
 end
 
