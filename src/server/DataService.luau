@@ -124,6 +124,20 @@ function DataService.setCash(player: Player, cash: number)
 	replicateCash(player, session.data.cash)
 end
 
+-- Wipe cash + station progress back to defaults (keeps the session saveable).
+function DataService.resetProgress(player: Player): boolean
+	local session = sessions[player]
+	if not session then
+		return false
+	end
+	session.data = PlayerData.createDefault()
+	if session.canSave then
+		session.isDirty = true
+	end
+	replicateCash(player, session.data.cash)
+	return true
+end
+
 function DataService.addCash(player: Player, amount: number)
 	local session = sessions[player]
 	if not session then

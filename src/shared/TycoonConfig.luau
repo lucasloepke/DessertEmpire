@@ -16,11 +16,20 @@ TycoonConfig.StationInteractSlack = 4
 TycoonConfig.Remotes = {
 	Folder = "Remotes",
 	StationAction = "StationAction",
+	AdminAction = "AdminAction",
+}
+
+-- Temporary debug tools. Studio always allowed; live game = CreatorId + UserIds.
+TycoonConfig.Admin = {
+	AddCashAmount = 1000,
+	UserIds = {
+		-- Add your Roblox userId here for published playtests.
+	},
 }
 
 --[[
 	Uniform floor button + floating hologram language for unlocks / upgrades.
-	Far away: physical button (+ optional icon) only. Close: text holograms appear.
+	Far away: physical button only. Close: text holograms appear.
 ]]
 TycoonConfig.Interact = {
 	-- Physical button (dark base + neon pad). Same shape everywhere; color encodes role.
@@ -45,17 +54,15 @@ TycoonConfig.Interact = {
 		RearmDistance = 4,
 	},
 	Hologram = {
-		-- Text panels only show when you're near the button/station.
-		TextMaxDistance = TycoonConfig.StationInteractDistance,
-		-- Simple icon marker can read from farther (far-away screenshot).
-		IconMaxDistance = 70,
-		IconStudsOffset = Vector3.new(0, 6.5, 0),
-		IconTag = "IconHologram",
+		-- Text panels show a bit farther out than the station sell panel.
+		TextMaxDistance = 28,
+		-- World-space height above the button (applied as StudsOffsetWorldSpace).
 		StudsOffset = Vector3.new(0, 4.5, 0),
 		Width = 220,
 	},
 	-- Client-side clickable station panel (title / payout / SELL bar).
 	Panel = {
+		-- World-space height above the counter.
 		StudsOffset = Vector3.new(0, 5.5, 0),
 		FadeSpeed = 8,
 	},
@@ -90,7 +97,7 @@ TycoonConfig.Stations = {
 		DisplayName = "Popsicle Stand",
 		UnlockCost = 0, -- starter station
 		BasePayout = 5,
-		BaseDuration = 3,
+		BaseDuration = 1.5,
 		-- Panel UPGRADE under SELL: repeatable forever. Each level multiplies
 		-- payout by PayoutGrowth; its price multiplies by CostGrowth.
 		-- CostGrowth must stay well above PayoutGrowth or income runs away.
@@ -99,11 +106,10 @@ TycoonConfig.Stations = {
 			CostGrowth = 1.6,
 			PayoutGrowth = 1.25,
 		},
-		--[[
-			Physical upgrades: bought in this order on one floor button. Each adds
-			a visible model and applies one effect: PayoutMultiplier,
-			SpeedMultiplier (divides duration), or Automates (the employee).
-			Visual.Offset is from the counter: X across, Y up, Z away from street.
+--[[
+			Physical upgrades: each has a floor button when its prerequisites are met.
+			Default prerequisite = previous entry in this list. Set Requires = { ids }
+			to unlock earlier/in parallel (Stand Helper appears with Deep Freezer).
 		]]
 		Physical = {
 			{
@@ -111,6 +117,7 @@ TycoonConfig.Stations = {
 				DisplayName = "Bigger Cooler",
 				Cost = 150,
 				PayoutMultiplier = 2,
+				ButtonOffset = Vector3.new(-4, 0, 12),
 				Visual = { Size = Vector3.new(3, 2.5, 3), Offset = Vector3.new(-6, 0, 2), Color = Color3.fromRGB(90, 140, 200) },
 			},
 			{
@@ -118,22 +125,51 @@ TycoonConfig.Stations = {
 				DisplayName = "Deep Freezer",
 				Cost = 1000,
 				PayoutMultiplier = 3,
+				ButtonOffset = Vector3.new(7, 0, 12),
 				Visual = { Size = Vector3.new(4, 3.5, 3), Offset = Vector3.new(6.5, 0, 2), Color = Color3.fromRGB(225, 235, 250) },
 			},
 			{
 				Id = "PopDispenser",
 				DisplayName = "Pop Dispenser",
 				Cost = 4000,
+				-- Halves cycle duration (sales run ×2 faster).
 				SpeedMultiplier = 2,
-				Visual = { Size = Vector3.new(2, 2.5, 1.5), Offset = Vector3.new(0, 3, 0.5), Color = Color3.fromRGB(255, 120, 170) },
+				ButtonOffset = Vector3.new(-3, 0, 14),
+				-- Was center of counter; now sits where the register used to.
+				Visual = { Size = Vector3.new(2, 2.5, 1.5), Offset = Vector3.new(2.2, 3, 0.4), Color = Color3.fromRGB(255, 120, 170) },
 			},
 			{
 				Id = "StandHelper",
 				DisplayName = "Stand Helper",
 				-- Employee = automation. Keep ≈ next tier's UnlockCost (just below).
+				-- Available alongside Deep Freezer (after Bigger Cooler), not last in line.
 				Cost = 10000,
 				Automates = true,
-				Visual = { Size = Vector3.new(2, 5, 1), Offset = Vector3.new(0, 0, 4), Color = Color3.fromRGB(245, 205, 70) },
+				Requires = { "BiggerCooler" },
+				ButtonOffset = Vector3.new(3, 0, 14),
+				-- Cashier NPC behind the counter + register on the counter top,
+				-- facing the employee (center, where the dispenser used to be).
+				Visual = {
+					ModelTemplate = "Cashier",
+					Offset = Vector3.new(0, 0, 4.5),
+					FaceStreet = true,
+					Parts = {
+						{
+							Name = "CashRegister",
+							Size = Vector3.new(1.6, 1.1, 1.2),
+							Offset = Vector3.new(0, 3, 0.5),
+							Color = Color3.fromRGB(55, 55, 65),
+							FaceEmployee = true,
+						},
+						{
+							Name = "RegisterDrawer",
+							Size = Vector3.new(1.2, 0.35, 0.5),
+							Offset = Vector3.new(0, 3, 1.1),
+							Color = Color3.fromRGB(200, 170, 60),
+							FaceEmployee = true,
+						},
+					},
+				},
 			},
 		},
 	},

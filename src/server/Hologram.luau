@@ -1,9 +1,7 @@
--- Distance-gated BillboardGuis for purchase labels and far-away icons.
+-- Distance-gated BillboardGuis for purchase labels.
 -- Far away: MaxDistance hides text. Close: title / copy / cost read clearly.
 -- The clickable station panel is client-side (StationPanel) because world
 -- BillboardGuis can't receive clicks.
-
-local CollectionService = game:GetService("CollectionService")
 
 local Shared = game:GetService("ReplicatedStorage"):WaitForChild("Shared", 10)
 assert(Shared, "Missing ReplicatedStorage.Shared")
@@ -44,7 +42,10 @@ local function attachBillboard(adornee: BasePart, name: string, maxDistance: num
 	gui.LightInfluence = 0
 	gui.MaxDistance = maxDistance
 	gui.Size = size
-	gui.StudsOffset = offset
+	-- World-space offset keeps the label planted above the adornee. Adornee must
+	-- be axis-aligned (use HologramAnchor on tilted button parts).
+	gui.StudsOffset = Vector3.zero
+	gui.StudsOffsetWorldSpace = offset
 	gui.Parent = adornee
 	return gui
 end
@@ -106,41 +107,6 @@ function Hologram.setPurchase(adornee: BasePart, options: PurchaseHologramOption
 	subtitle.Visible = subtitle.Text ~= ""
 	cost.Text = options.CostText
 	cost.TextColor3 = options.AccentColor
-
-	return gui
-end
-
---[[
-	Far-distance marker (e.g. "$" over a station). Visible farther than text;
-	the client hides it once the player is close enough to read the panel.
-]]
-function Hologram.createIcon(adornee: BasePart, text: string): BillboardGui
-	local cfg = TycoonConfig.Interact.Hologram
-
-	local gui = attachBillboard(
-		adornee,
-		"IconHologram",
-		cfg.IconMaxDistance,
-		UDim2.fromOffset(64, 64),
-		cfg.IconStudsOffset
-	)
-	CollectionService:AddTag(gui, cfg.IconTag)
-
-	local badge = Instance.new("TextLabel")
-	badge.Name = "Icon"
-	badge.AnchorPoint = Vector2.new(0.5, 0.5)
-	badge.Position = UDim2.fromScale(0.5, 0.5)
-	badge.Size = UDim2.fromScale(1, 1)
-	badge.BackgroundColor3 = Color3.fromRGB(50, 180, 70)
-	badge.Text = text
-	badge.TextColor3 = Color3.new(1, 1, 1)
-	badge.TextSize = 36
-	badge.Font = Enum.Font.GothamBold
-	badge.Parent = gui
-	stroke(badge, 3)
-	local corner = Instance.new("UICorner")
-	corner.CornerRadius = UDim.new(0.5, 0)
-	corner.Parent = badge
 
 	return gui
 end

@@ -2,7 +2,9 @@
 -- (owned physical upgrades, the next-upgrade floor button) in sync with save data.
 -- Gameplay (sell cycle, purchases) lives in StationService.
 
-local Shared = game:GetService("ReplicatedStorage"):WaitForChild("Shared", 10)
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local Shared = ReplicatedStorage:WaitForChild("Shared", 10)
 assert(Shared, "Missing ReplicatedStorage.Shared")
 
 local TycoonConfig = require(Shared:WaitForChild("TycoonConfig", 10))
@@ -39,15 +41,124 @@ end
 	Station-space → world. Offset is from the counter's footprint:
 	X across, Y up from the pad top (to the part's bottom), Z away from the street.
 	South plots face the other way, so X and Z mirror.
+	face: "Street" aims toward the street; "Employee" aims toward the plot
+	(behind the counter).
 ]]
-local function stationPoint(record: StandRecord, offset: Vector3, height: number): CFrame
+local function stationPoint(record: StandRecord, offset: Vector3, height: number, face: string?): CFrame
 	local sign = if record.isNorth then 1 else -1
 	local localPos = Vector3.new(
 		offset.X * sign,
 		record.pad.Size.Y / 2 + offset.Y + height / 2,
 		record.localZ + offset.Z * sign
 	)
-	return CFrame.new(record.pad.CFrame:PointToWorldSpace(localPos))
+	local worldPos = record.pad.CFrame:PointToWorldSpace(localPos)
+	if face == "Street" then
+		return CFrame.lookAt(worldPos, worldPos + Vector3.new(0, 0, -sign))
+	elseif face == "Employee" then
+		return CFrame.lookAt(worldPos, worldPos + Vector3.new(0, 0, sign))
+	end
+	return CFrame.new(worldPos)
+end
+
+local function faceFromVisual(visual: any): string?
+	if visual.FaceEmployee == true then
+		return "Employee"
+	end
+	if visual.FaceStreet == true then
+		return "Street"
+	end
+	return nil
+end
+
+-- Floor button for a physical upgrade: behind the counter, per-upgrade offset.
+local function buttonCFrame(record: StandRecord, upgrade: any): CFrame
+	local buttonHeight = TycoonConfig.Interact.Button.BaseHeight
+	local offset = upgrade.ButtonOffset or Vector3.new(0, 0, 12)
+	return stationPoint(record, offset, buttonHeight) + Vector3.new(0, 0.02, 0)
+end
+
+local function spawnVisualPart(parent: Instance, name: string, visual: any, record: StandRecord)
+	local part = Instance.new("Part")
+	part.Name = name
+	part.Anchored = true
+	part.Material = Enum.Material.Plastic
+	part.Color = visual.Color
+	part.Size = visual.Size
+	part.CFrame = stationPoint(record, visual.Offset, visual.Size.Y, faceFromVisual(visual))
+	studsAllAround(part)
+	part.Parent = parent
+end
+
+--[[
+	Clone ReplicatedStorage.Cashier (Creator Store) onto the stand.
+	Drops in from above for the bit, then freezes feet-on-pad.
+]]
+local function spawnTemplateModel(parent: Instance, name: string, visual: any, record: StandRecord)
+	local templateName = visual.ModelTemplate or "Cashier"
+	local template = ReplicatedStorage:FindFirstChild(templateName)
+	if not (template and template:IsA("Model")) then
+		warn("[StandService] Missing ReplicatedStorage." .. tostring(templateName) .. " — skip NPC visual")
+		return nil
+	end
+
+	local model = template:Clone()
+	model.Name = name
+
+	-- Animate is a LocalScript for player characters; drop it on the NPC prop.
+	local animate = model:FindFirstChild("Animate")
+	if animate then
+		animate:Destroy()
+	end
+
+	local humanoid = model:FindFirstChildOfClass("Humanoid")
+	if humanoid then
+		humanoid.DisplayDistanceType = Enum.HumanoidDisplayDistanceType.None
+		humanoid.HealthDisplayType = Enum.HumanoidHealthDisplayType.AlwaysOff
+		humanoid.NameDisplayDistance = 0
+		humanoid.HealthDisplayDistance = 0
+		humanoid.WalkSpeed = 0
+		humanoid.JumpPower = 0
+		humanoid.JumpHeight = 0
+		humanoid.AutoRotate = false
+	end
+
+	-- Seat height: pivot above the model's bounding-box bottom.
+	local bbCF, bbSize = model:GetBoundingBox()
+	local pivot = model:GetPivot()
+	local bottomToPivot = pivot.Position.Y - (bbCF.Position.Y - bbSize.Y / 2)
+	local floorCF = stationPoint(record, visual.Offset, 0, faceFromVisual(visual))
+	local seatedCF = floorCF * CFrame.new(0, bottomToPivot, 0)
+	local dropHeight = visual.DropHeight or 12
+
+	for _, descendant in ipairs(model:GetDescendants()) do
+		if descendant:IsA("BasePart") then
+			local isAccessory = descendant:FindFirstAncestorWhichIsA("Accessory") ~= nil
+			descendant.Anchored = false
+			descendant.CanCollide = not isAccessory
+			descendant.CanTouch = false
+			descendant.CanQuery = false
+		end
+	end
+
+	model:PivotTo(floorCF * CFrame.new(0, dropHeight, 0))
+	model.Parent = parent
+
+	task.delay(1.4, function()
+		if not model.Parent then
+			return
+		end
+		model:PivotTo(seatedCF)
+		for _, descendant in ipairs(model:GetDescendants()) do
+			if descendant:IsA("BasePart") then
+				descendant.AssemblyLinearVelocity = Vector3.zero
+				descendant.AssemblyAngularVelocity = Vector3.zero
+				descendant.Anchored = true
+				descendant.CanCollide = false
+			end
+		end
+	end)
+
+	return model
 end
 
 local function rebuildUpgradeVisuals(record: StandRecord, station: any)
@@ -62,45 +173,80 @@ local function rebuildUpgradeVisuals(record: StandRecord, station: any)
 	for _, upgrade in ipairs(record.config.Physical) do
 		if station.owned[upgrade.Id] then
 			local visual = upgrade.Visual
-			local part = Instance.new("Part")
-			part.Name = upgrade.Id
-			part.Anchored = true
-			part.Material = Enum.Material.Plastic
-			part.Color = visual.Color
-			part.Size = visual.Size
-			part.CFrame = stationPoint(record, visual.Offset, visual.Size.Y)
-			studsAllAround(part)
-			part.Parent = folder
+			if visual.ModelTemplate or visual.Parts then
+				local model = Instance.new("Model")
+				model.Name = upgrade.Id
+				model.Parent = folder
+				if visual.ModelTemplate then
+					spawnTemplateModel(model, "NPC", visual, record)
+				end
+				if visual.Parts then
+					for _, partVis in ipairs(visual.Parts) do
+						spawnVisualPart(model, partVis.Name, partVis, record)
+					end
+				end
+			else
+				spawnVisualPart(folder, upgrade.Id, visual, record)
+			end
 		end
 	end
 end
 
--- Recolor / re-label the floor button for the next physical upgrade.
-local function refreshButton(record: StandRecord, data: any)
-	local button = record.model:FindFirstChild("UpgradeButton")
-	if not (button and button:IsA("Model")) then
-		return
+-- One floor button per currently-available physical upgrade.
+local function refreshButtons(record: StandRecord, data: any)
+	local station = data.stations[record.config.Id]
+	local available = StationMath.availablePhysical(record.config, station)
+	local wanted: { [string]: any } = {}
+	for _, upgrade in ipairs(available) do
+		wanted[upgrade.Id] = upgrade
 	end
 
-	local station = data.stations[record.config.Id]
-	local nextUpgrade = StationMath.nextPhysical(record.config, station)
-	if not nextUpgrade then
-		button:Destroy()
-		return
+	for _, child in ipairs(record.model:GetChildren()) do
+		if child:IsA("Model") and child:GetAttribute("Kind") == "PhysicalUpgrade" then
+			local upgradeId = child:GetAttribute("UpgradeId")
+			if typeof(upgradeId) ~= "string" or not wanted[upgradeId] then
+				child:Destroy()
+			end
+		end
 	end
 
 	local buttonCfg = TycoonConfig.Interact.Button
-	local color = if data.cash >= nextUpgrade.Cost then buttonCfg.AffordableColor else buttonCfg.UnaffordableColor
-	PhysicalButton.setColor(button, color)
+	for _, upgrade in ipairs(available) do
+		local buttonName = "UpgradeButton_" .. upgrade.Id
+		local button = record.model:FindFirstChild(buttonName)
+		if not (button and button:IsA("Model")) then
+			button = PhysicalButton.create({
+				Name = buttonName,
+				CFrame = buttonCFrame(record, upgrade),
+				Kind = "PhysicalUpgrade",
+				StationId = record.config.Id,
+				UpgradeId = upgrade.Id,
+			})
+			button.Parent = record.model
+		else
+			button:PivotTo(buttonCFrame(record, upgrade) * button:GetPivot().Rotation)
+		end
 
-	local pad = button:FindFirstChild("Pad")
-	if pad and pad:IsA("BasePart") then
-		Hologram.setPurchase(pad, {
-			Title = nextUpgrade.DisplayName,
-			Subtitle = StationMath.describeEffect(record.config, nextUpgrade),
-			CostText = Format.cash(nextUpgrade.Cost),
-			AccentColor = PhysicalButton.resolveColor(color),
-		})
+		local color = if data.cash >= upgrade.Cost then buttonCfg.AffordableColor else buttonCfg.UnaffordableColor
+		PhysicalButton.setColor(button, color)
+
+		local pad = button:FindFirstChild("Pad")
+		if pad then
+			local stale = pad:FindFirstChild("PurchaseHologram")
+			if stale then
+				stale:Destroy()
+			end
+		end
+
+		local anchor = button:FindFirstChild("HologramAnchor")
+		if anchor and anchor:IsA("BasePart") then
+			Hologram.setPurchase(anchor, {
+				Title = upgrade.DisplayName,
+				Subtitle = StationMath.describeEffect(record.config, upgrade),
+				CostText = Format.cash(upgrade.Cost),
+				AccentColor = PhysicalButton.resolveColor(color),
+			})
+		end
 	end
 end
 
@@ -112,12 +258,12 @@ function StandService.refresh(player: Player)
 		return
 	end
 	rebuildUpgradeVisuals(record, data.stations[record.config.Id])
-	refreshButton(record, data)
+	refreshButtons(record, data)
 end
 
 --[[
-	Tier-1 stand: counter near the street edge, a "$" icon readable from afar,
-	owned physical upgrades as models, and one floor button for the next one.
+	Tier-1 stand: counter near the street edge, owned physical upgrades as
+	models, and floor buttons for every available physical upgrade.
 ]]
 function StandService.build(player: Player, plotModel: Model, data: any)
 	StandService.clear(player)
@@ -167,31 +313,17 @@ function StandService.build(player: Player, plotModel: Model, data: any)
 	studsAllAround(counter)
 	counter.Parent = stand
 
-	Hologram.createIcon(counter, "$")
-
-	-- Off to the side toward the street, clear of the spawn point at X = 0.
-	if StationMath.nextPhysical(config, station) then
-		local buttonHeight = TycoonConfig.Interact.Button.BaseHeight
-		local button = PhysicalButton.create({
-			Name = "UpgradeButton",
-			CFrame = stationPoint(record, Vector3.new(8, 0, -5), buttonHeight) + Vector3.new(0, 0.02, 0),
-			Kind = "PhysicalUpgrade",
-			StationId = config.Id,
-		})
-		button.Parent = stand
-	end
-
 	stand.PrimaryPart = counter
 	stand.Parent = plotModel
 
 	standsByPlayer[player] = record
 	StandService.refresh(player)
 
-	-- Button flips cyan/orange as the player's cash crosses the price.
+	-- Buttons flip cyan/orange as the player's cash crosses each price.
 	record.cashConnection = player:GetAttributeChangedSignal("Cash"):Connect(function()
 		local current = DataService.get(player)
 		if current and standsByPlayer[player] == record then
-			refreshButton(record, current)
+			refreshButtons(record, current)
 		end
 	end)
 

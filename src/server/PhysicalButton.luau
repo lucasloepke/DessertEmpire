@@ -15,6 +15,7 @@ export type ButtonOptions = {
 	Color: (string | Color3)?,
 	Kind: string?,
 	StationId: string?,
+	UpgradeId: string?,
 }
 
 function PhysicalButton.resolveColor(color: (string | Color3)?): Color3
@@ -95,6 +96,20 @@ function PhysicalButton.create(options: ButtonOptions): Model
 	light.Brightness = cfg.GlowBrightness
 	light.Parent = pad
 
+	-- Axis-aligned adorn point. The pad cylinder is tilted 90°, and BillboardGui
+	-- world offsets follow the adornee's axes — so adorning the pad shoves the
+	-- label sideways instead of straight up.
+	local anchor = Instance.new("Part")
+	anchor.Name = "HologramAnchor"
+	anchor.Anchored = true
+	anchor.CanCollide = false
+	anchor.CanQuery = false
+	anchor.CanTouch = false
+	anchor.Transparency = 1
+	anchor.Size = Vector3.new(0.2, 0.2, 0.2)
+	anchor.CFrame = options.CFrame
+	anchor.Parent = model
+
 	model.PrimaryPart = base
 	model:SetAttribute("AccentColor", accent:ToHex())
 	if options.Kind then
@@ -102,6 +117,9 @@ function PhysicalButton.create(options: ButtonOptions): Model
 	end
 	if options.StationId then
 		model:SetAttribute("StationId", options.StationId)
+	end
+	if options.UpgradeId then
+		model:SetAttribute("UpgradeId", options.UpgradeId)
 	end
 
 	return model

@@ -10,7 +10,7 @@ Every tier is the same mechanic. There is exactly one mechanic in Dessert Empire
 
 1. Player walks up to a station. A floating panel fades in.
 2. Player clicks the button on it.
-3. An animated progress bar runs for N seconds.
+3. An animated progress bar runs for N seconds; the bar label counts down remaining time (`1.5s` → `0.5s` …). Idle = `SELL`, automated idle = `AUTO`.
 4. The bar completes and pays $X.
 
 Automation means the button clicks itself the instant the bar completes. The bar then runs forever and pays $X every N seconds without the player. It is off-cooldown for one frame, so an automated station and a manual one are the same object in the same state loop — automation is a boolean, not a second system.
@@ -29,14 +29,14 @@ Each new tier is a new station with a bigger payout, sitting alongside the old o
 ## The spend flow (same for every station)
 
 1. **Panel UPGRADE** — the button under SELL on the floating panel. Repeatable forever. Each level multiplies payout by `PayoutGrowth` (×1.25); its price multiplies by `CostGrowth` (×1.6) each time. This is the always-available money sink.
-2. **Physical upgrades** — bought **in order** on one walk-on floor button next to the station. Each adds a visible model and one big effect: `PayoutMultiplier` (e.g. ×2, ×3) or `SpeedMultiplier` (e.g. ×2 sell speed, which halves duration).
-3. **Employee** — the last physical upgrade. `Automates = true`: the bar clicks itself forever.
+2. **Physical upgrades** — walk-on floor buttons next to the station. Default unlock is in list order; an upgrade can set `Requires = { ids }` to appear earlier/in parallel. Each available upgrade gets its own button. Each adds a visible model and one big effect: `PayoutMultiplier` (e.g. ×2, ×3) or `SpeedMultiplier` (e.g. ×2 sell speed, which halves duration).
+3. **Employee** — physical upgrade with `Automates = true`: the bar clicks itself forever. On tier 1 it unlocks with Deep Freezer (after Bigger Cooler), via `Requires = { "BiggerCooler" }`.
 4. **Next tier unlock** — opens the next station (not built yet).
 
 ## Core design rules (settled, don't re-propose alternatives)
 
 - **Every station is manual first.** The player clicks it themselves; the employee automates it.
-- **Every station follows the spend flow above.** Panel upgrade + ordered physical upgrades ending in an employee. Don't invent per-station mechanics.
+- **Every station follows the spend flow above.** Panel upgrade + physical upgrades (ordered unless `Requires` says otherwise) including an employee. Don't invent per-station mechanics.
 - **The panel upgrade is payout only.** Speed comes only from physical upgrades, so each lever has one obvious source.
 - **Keep `CostGrowth` well above `PayoutGrowth`.** At ×1.35 cost vs ×1.25 payout, a simulated player hit $2.7K/s by automation and made tier 2 trivial. ×1.6 is the current tested value — re-simulate before changing either.
 - Employee cost for a tier ≈ unlock cost of the next tier. Keep those two numbers adjacent in the config so the rule is checkable at a glance.
@@ -46,6 +46,7 @@ Each new tier is a new station with a bigger payout, sitting alongside the old o
 - Players don't leave the plot to progress. Off-plot is for foraging rare ingredients, a trading hub, and seasonal events only.
 - All progression numbers live in one shared config module. No magic numbers in systems code.
 - **Server is authoritative** for all money and station state. Clients send requests only; the server independently re-validates ownership, distance, cooldown, and affordability on every one. An automated station's timer runs on the server, not in the client's bar.
+- **No far-away `$` icon** over the stand. Purchase text holograms are distance-gated; the far marker was cut.
 
 ## Simplicity rules (learned the hard way)
 
@@ -73,18 +74,20 @@ Each is one station, following the model above, with a bigger payout than the la
 
 ## Tier 1 — popsicle stand
 
-The canonical station. Click SELL, a 3-second bar runs, it pays $5. UPGRADE under SELL starts at $10 and makes sales ×1.25 per level. The floor button then offers, in order:
+The canonical station. Click SELL, a **1.5-second** bar runs, it pays $5. UPGRADE under SELL starts at $10 and makes sales ×1.25 per level. Floor buttons offer available physical upgrades:
 
-| # | Upgrade | Cost | Effect | Visual |
-| --- | --- | --- | --- | --- |
-| 1 | Bigger Cooler | $150 | ×2 sales | blue cooler, left of counter |
-| 2 | Deep Freezer | $1,000 | ×3 sales | white freezer, right of counter |
-| 3 | Pop Dispenser | $4,000 | ×2 sell speed | pink box on the counter |
-| 4 | Stand Helper | $10,000 | automates | yellow employee behind counter |
+| # | Upgrade | Cost | Effect | Visual | Unlock |
+| --- | --- | --- | --- | --- | --- |
+| 1 | Bigger Cooler | $150 | ×2 sales | blue cooler, left of counter | start |
+| 2 | Deep Freezer | $1,000 | ×3 sales | white freezer, right of counter | after Cooler |
+| 3 | Pop Dispenser | $4,000 | ×2 sell speed | pink box on counter (right; old register spot) | after Freezer |
+| 4 | Stand Helper | $10,000 | automates | Creator Store `Cashier` NPC behind counter + register on counter center facing employee | after Cooler (`Requires = { "BiggerCooler" }`, same time as Freezer) |
 
-Simulated pacing (player clicks every cycle, buys as soon as affordable): Cooler ~1m50s, Freezer ~4m, Dispenser ~5m20s, Helper ~6m20s at panel level ~15 and ~$570/s. Tier 2 unlock is $10,000 to match the Helper.
+Stand Helper arrival: clones `ReplicatedStorage.Cashier`, drops from ~12 studs, then snaps feet-to-pad and freezes (anchored prop, no nameplates). Cash register uses `FaceEmployee`; cashier uses `FaceStreet`.
 
-What it does not have, on purpose: mold trays, pouring, stock, customer arrivals, queues, ProximityPrompts, floating status text. All were tried and cut.
+Simulated pacing (player clicks every cycle, buys as soon as affordable) was last run at **BaseDuration = 3** — re-simulate after the 1.5s change before trusting those minutes. Tier 2 unlock is $10,000 to match the Helper.
+
+What it does not have, on purpose: mold trays, pouring, stock, customer arrivals, queues, ProximityPrompts, floating status text, far-away `$` stand icon. All were tried and cut.
 
 ## Current implementation state
 
@@ -95,9 +98,11 @@ Working:
 - Join-order skeleton (`CharacterAutoLoads` off)
 - Placeholder popsicle stand on claim; vacant pads are grass, claimed pads flip to boardwalk
 - Creator Store road tiled and **baked** into the place (`Workspace.Plots.Street.RoadSegments`)
-- Tier 1 loop: client station panel (SELL bar + UPGRADE) → server-run cycle → payout; employee restarts the cycle on the server
-- Uniform walk-on purchase button (cyan = affordable, orange = not) + distance-gated holograms; offers the next physical upgrade in order
+- Tier 1 loop: client station panel (SELL countdown bar + UPGRADE) → server-run cycle → payout; employee restarts the cycle on the server
+- Walk-on purchase buttons (cyan = affordable, orange = not) + distance-gated text holograms; one button per `StationMath.availablePhysical` offer
+- Stand Helper parallel unlock with Deep Freezer; Pop Dispenser still sequential after Freezer
 - Money HUD (Cash attribute) with +$ gain popups; positional sale sound
+- Temporary admin HUD (left side): `+$1K` and **Reset Progress** — Studio always; live = place CreatorId + `TycoonConfig.Admin.UserIds`. Server re-checks; sets `AdminEnabled` attribute.
 
 Not built yet: everything past tier 1, offline earnings, real cha-ching / music audio ids (`TycoonConfig.Audio`).
 
@@ -106,38 +111,42 @@ Not built yet: everything past tier 1, offline earnings, real cha-ching / music 
 - **Rojo 7** (aftman: `~/.aftman/bin/rojo.exe`). Source of truth is `default.project.json` + `src/` + `assets/`.
 - After geometry/config changes: `python tools/bake_plots.py` then `rojo build -o DessertEmpire.rbxl` (or `rojo serve` + reopen/sync).
 - **Do not use `Position` on BaseParts in `default.project.json`.** Rojo does not persist it — parts collapse to the origin. Always use **`CFrame`** (12-number `GetComponents()` list).
-- `Workspace.$ignoreUnknownInstances = true` so Studio-inserted instances (e.g. a one-off Toolbox prop) survive sync. Still prefer baking lasting art into the project/`assets/`.
+- `Workspace.$ignoreUnknownInstances = true` and `ReplicatedStorage.$ignoreUnknownInstances = true` so Studio-inserted instances (e.g. Creator Store Cashier) survive sync. Still prefer baking lasting art into the project/`assets/`.
 - Rebuilding the `.rbxl` from Rojo **overwrites** the place file — export Creator Store models to `assets/` before relying on them.
 
 ### Rojo layout
 
 ```
 src/shared/     → ReplicatedStorage.Shared
-  TycoonConfig.luau   — all tunables (plots, stations, interact, audio, road, datastore)
+  TycoonConfig.luau   — all tunables (plots, stations, interact, admin, audio, road, datastore)
   PlayerData.luau     — default save shape + sanitize
   Format.luau         — shared cash formatting ($1.5K)
-  StationMath.luau    — payout / duration / upgrade cost / next physical upgrade
+  StationMath.luau    — payout / duration / upgrade cost / availablePhysical (Requires-aware)
 
 src/server/     → ServerScriptService.Server
   init.server.luau    — join/leave order
-  DataService.luau    — saves, cash, trySpend
+  DataService.luau    — saves, cash, trySpend, resetProgress
   PlotService.luau    — register place plots; assign/release; spawn placement
-  StandService.luau   — stand model + owned-upgrade models + floor button, refreshed from data
+  StandService.luau   — stand model + owned-upgrade visuals + floor buttons per available upgrade
   StationService.luau — sell cycle, automation, panel upgrade, walk-on purchases, StationAction remote
-  PhysicalButton.luau — the one purchase-button model
-  Hologram.luau       — purchase text holograms + far-away icons
+  AdminService.luau   — AdminAction remote: ResetProgress / AddCash (Studio + creator gated)
+  PhysicalButton.luau — the one purchase-button model (UpgradeId attribute)
+  Hologram.luau       — purchase text holograms only (distance-gated; no far icons)
   RoadService.luau    — uses baked RoadSegments; runtime tile only if missing
 
 src/client/     → StarterPlayer.StarterPlayerScripts.Client
   init.client.luau    — starts the modules below
   Hud.luau            — money display
-  StationPanel.luau   — clickable SELL bar + UPGRADE button
+  AdminHud.luau       — left-side debug buttons (AdminEnabled only)
+  StationPanel.luau   — SELL bar (countdown while running) + UPGRADE button
   Audio.luau          — music + sale sound (warns on failed loads)
-  HologramVisibility.luau — hides far icons when text is in range
 
 assets/
   Road.rbxmx            — exported Creator Store road template (asset id 8856361636)
   RoadSegments.rbxmx    — baked tiles along the street (from bake_plots.py)
+
+  Stand Helper NPC: ReplicatedStorage.Cashier (Creator Store model in the place via
+  $ignoreUnknownInstances). Export to assets/ before a full Rojo rebuild or it can be lost.
 
 tools/bake_plots.py     — rebuilds Workspace.Plots + RoadSegments from config + Road.rbxmx
 ```
@@ -148,8 +157,11 @@ tools/bake_plots.py     — rebuilds Workspace.Plots + RoadSegments from config 
 - Save shape (v2): `{ version, cash, stations[id] = { unlocked, level, owned = { [physicalUpgradeId] = true } }, lastSeen }`. Automation is derived (owns an `Automates` upgrade), not stored. v1 saves migrate in `PlayerData.sanitize` (`toolLevel` → `level`, `automated` → owns the employee).
 - Failed load → session **unsaveable** (defaults for play only; never write over a real save).
 - Unpublished Studio: in-memory saves so the server still boots.
-- Remotes: one — `ReplicatedStorage.Remotes.StationAction` (`"Sell" | "Upgrade", stationId`). Server re-checks ownership, distance, busy, affordability. Physical upgrades are walk-on (server Touched), no remote.
-- Cash / plot index via Player attributes. `Plot` + `Station` are ObjectValues on the Player. Station state (`CycleStartedAt`/`CycleEndsAt` server time, `Payout`, `Duration`, `Level`, `UpgradeCost`, `Automated`, `SaleCount`) is attributes on the station model.
+- Remotes under `ReplicatedStorage.Remotes`:
+  - `StationAction` — `"Sell" | "Upgrade", stationId`. Server re-checks ownership, distance, busy, affordability.
+  - `AdminAction` — `"ResetProgress" | "AddCash"`. Server re-checks admin gate; AddCash uses `TycoonConfig.Admin.AddCashAmount` (1000).
+- Physical upgrades are walk-on (server Touched), no remote. Button attribute `UpgradeId` selects which available upgrade to buy.
+- Cash / plot index via Player attributes. `AdminEnabled` marks who sees the admin HUD. `Plot` + `Station` are ObjectValues on the Player. Station state (`CycleStartedAt`/`CycleEndsAt` server time, `Payout`, `Duration`, `Level`, `UpgradeCost`, `Automated`, `SaleCount`) is attributes on the station model.
 
 ### World / plot layout (settled)
 
@@ -194,15 +206,20 @@ Each plot Model: `Pad` (Part), `Spawn` (SpawnLocation at street edge, disabled u
 
 ### Tier 1 config (in TycoonConfig)
 
-- `BaseDuration = 3`, `BasePayout = 5`. `Upgrade = { BaseCost = 10, CostGrowth = 1.6, PayoutGrowth = 1.25 }`. `Physical` list as in the Tier 1 table; Stand Helper `Cost = 10000` sits next to placeholder tier-2 `UnlockCost = 10000`.
+- `BaseDuration = 1.5`, `BasePayout = 5`. `Upgrade = { BaseCost = 10, CostGrowth = 1.6, PayoutGrowth = 1.25 }`.
+- Physical: Cooler → Freezer + Helper in parallel (`StandHelper.Requires = { "BiggerCooler" }`) → Dispenser after Freezer. Helper `Cost = 10000` sits next to placeholder tier-2 `UnlockCost = 10000`.
+- Stand Helper visual: `ModelTemplate = "Cashier"` + cash register parts (`FaceEmployee`). Dispenser offset is the old register spot (right of counter).
+- Admin: `TycoonConfig.Admin = { AddCashAmount = 1000, UserIds = {} }`.
 
 ## Unverified / open
 
-- Automated stations keep the full panel (bar reads AUTO) because UPGRADE still lives there. Revisit if it feels cluttered.
-- Pacing numbers come from a simple greedy-player simulation, not playtests.
+- Automated stations keep the full panel (bar shows countdown while running, else `AUTO`) because UPGRADE still lives there. Revisit if it feels cluttered.
+- Pacing numbers are stale after `BaseDuration` 3 → 1.5 and after Helper unlocking with Freezer — re-simulate before trusting old minute marks.
 - Nothing past tier 1 is designed in numbers yet (tier 2 is a placeholder with `UnlockCost = 10000` and no physical upgrades).
 - Plot pads are Plastic/Studs placeholders — boardwalk art later.
 - Road tile seams / exact Y if the Creator Store mesh is replaced.
+- `ReplicatedStorage.Cashier` is not baked into `assets/` yet — a full Rojo rebuild can drop it unless exported first.
+- Admin tools are temporary debug UI; remove or tighten before ship.
 
 ---
 

@@ -7,9 +7,11 @@ local PlotService = require(script.PlotService)
 local StandService = require(script.StandService)
 local StationService = require(script.StationService)
 local RoadService = require(script.RoadService)
+local AdminService = require(script.AdminService)
 
 PlotService.init()
 StationService.init()
+AdminService.init()
 RoadService.tileAlongStreet()
 DataService.bindAutoSave(60)
 

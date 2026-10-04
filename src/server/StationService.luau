@@ -133,13 +133,19 @@ local function onStationAction(player: Player, action: any, stationId: any)
 	end
 end
 
-local function buyNextPhysical(player: Player, state: State): boolean
+local function buyPhysical(player: Player, state: State, upgradeId: string): boolean
 	local station = stationData(player, state.config.Id)
-	if not station then
+	if not station or station.owned[upgradeId] then
 		return false
 	end
 
-	local upgrade = StationMath.nextPhysical(state.config, station)
+	local upgrade = nil
+	for _, entry in ipairs(StationMath.availablePhysical(state.config, station)) do
+		if entry.Id == upgradeId then
+			upgrade = entry
+			break
+		end
+	end
 	if not upgrade or not DataService.trySpend(player, upgrade.Cost) then
 		return false
 	end
@@ -210,6 +216,23 @@ local function bindButton(player: Player, state: State, button: Model, onPress: 
 	end
 end
 
+local function bindPhysicalButton(player: Player, state: State, button: Model)
+	if button:GetAttribute("Kind") ~= "PhysicalUpgrade" then
+		return
+	end
+	local upgradeId = button:GetAttribute("UpgradeId")
+	if typeof(upgradeId) ~= "string" then
+		return
+	end
+	if button:GetAttribute("Bound") == true then
+		return
+	end
+	button:SetAttribute("Bound", true)
+	bindButton(player, state, button, function()
+		return buyPhysical(player, state, upgradeId)
+	end)
+end
+
 function StationService.init()
 	local folder = ReplicatedStorage:FindFirstChild(TycoonConfig.Remotes.Folder)
 	if not folder then
@@ -251,12 +274,16 @@ function StationService.attach(player: Player, stand: Model)
 	stand:SetAttribute("CycleEndsAt", 0)
 	syncAttributes(state, station)
 
-	local button = stand:FindFirstChild("UpgradeButton")
-	if button and button:IsA("Model") then
-		bindButton(player, state, button, function()
-			return buyNextPhysical(player, state)
-		end)
+	for _, child in ipairs(stand:GetChildren()) do
+		if child:IsA("Model") then
+			bindPhysicalButton(player, state, child)
+		end
 	end
+	stand.ChildAdded:Connect(function(child)
+		if states[player] == state and child:IsA("Model") then
+			bindPhysicalButton(player, state, child)
+		end
+	end)
 
 	if StationMath.isAutomated(config, station) then
 		beginCycle(player, state)

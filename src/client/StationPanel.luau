@@ -67,7 +67,9 @@ function StationPanel.start(onSale: (BasePart) -> (), onUpgrade: ((BasePart) -> 
 	gui.LightInfluence = 0
 	gui.ResetOnSpawn = false
 	gui.Size = UDim2.fromOffset(240, 196)
-	gui.StudsOffset = panelCfg.StudsOffset
+	-- Same planted offset as purchase holograms (counter is already upright).
+	gui.StudsOffset = Vector3.zero
+	gui.StudsOffsetWorldSpace = panelCfg.StudsOffset
 	gui.Enabled = false
 	gui.Parent = playerGui
 
@@ -273,7 +275,13 @@ function StationPanel.start(onSale: (BasePart) -> (), onUpgrade: ((BasePart) -> 
 		fill.Size = UDim2.fromScale(progress, 1)
 
 		local automated = stand:GetAttribute("Automated") == true
-		barLabel.Text = if automated then "AUTO" elseif running then "SELLING..." else "SELL"
+		if running then
+			barLabel.Text = string.format("%.1fs", math.max(0, endsAt - now))
+		elseif automated then
+			barLabel.Text = "AUTO"
+		else
+			barLabel.Text = "SELL"
+		end
 
 		local cost = stand:GetAttribute("UpgradeCost") or 0
 		local cash = player:GetAttribute("Cash") or 0
