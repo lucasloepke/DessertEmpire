@@ -2,19 +2,25 @@
   "name": "DessertEmpire",
   "tree": {
     "$className": "DataModel",
-
     "ReplicatedStorage": {
       "Shared": {
         "$path": "src/shared"
+      },
+      "$ignoreUnknownInstances": true,
+      "RoadTemplate": {
+        "$path": "assets/Road.rbxmx"
       }
     },
-
     "ServerScriptService": {
       "Server": {
         "$path": "src/server"
       }
     },
-
+    "Players": {
+      "$properties": {
+        "CharacterAutoLoads": false
+      }
+    },
     "StarterPlayer": {
       "StarterPlayerScripts": {
         "Client": {
@@ -22,8 +28,9 @@
         }
       }
     },
-
     "Workspace": {
+      "$className": "Workspace",
+      "$ignoreUnknownInstances": true,
       "$properties": {
         "FilteringEnabled": true
       },
@@ -31,22 +38,827 @@
         "$className": "Part",
         "$properties": {
           "Anchored": true,
-          "Color": [
-            0.38823,
-            0.37254,
-            0.38823
-          ],
           "Locked": true,
-          "Position": [
-            0,
-            -10,
-            0
+          "Material": "Grass",
+          "Color": [
+            0.29412,
+            0.60392,
+            0.26667
           ],
           "Size": [
-            512,
-            20,
-            512
-          ]
+            2048.0,
+            20.0,
+            2048.0
+          ],
+          "CFrame": [
+            0.0,
+            -14.0,
+            0.0,
+            1.0,
+            0.0,
+            0.0,
+            0.0,
+            1.0,
+            0.0,
+            -0.0,
+            0.0,
+            1.0
+          ],
+          "TopSurface": "Smooth",
+          "BottomSurface": "Smooth"
+        }
+      },
+      "Plots": {
+        "$className": "Folder",
+        "Street": {
+          "$className": "Model",
+          "Pavement": {
+            "$className": "Part",
+            "$properties": {
+              "Anchored": true,
+              "Material": "Plastic",
+              "Color": [
+                0.27451,
+                0.27451,
+                0.29412
+              ],
+              "Size": [
+                1320.0,
+                1.0,
+                80.0
+              ],
+              "CFrame": [
+                0.0,
+                3.0,
+                0.0,
+                1.0,
+                0.0,
+                0.0,
+                0.0,
+                1.0,
+                0.0,
+                -0.0,
+                0.0,
+                1.0
+              ],
+              "TopSurface": "Studs",
+              "BottomSurface": "Studs",
+              "LeftSurface": "Studs",
+              "RightSurface": "Studs",
+              "FrontSurface": "Studs",
+              "BackSurface": "Studs",
+              "Transparency": 1
+            }
+          },
+          "HubSpawn": {
+            "$className": "SpawnLocation",
+            "$properties": {
+              "Anchored": true,
+              "Material": "Plastic",
+              "Color": [
+                0.63922,
+                0.63529,
+                0.64706
+              ],
+              "Size": [
+                8.0,
+                1.0,
+                8.0
+              ],
+              "CFrame": [
+                0.0,
+                3.0,
+                0.0,
+                1.0,
+                0.0,
+                0.0,
+                0.0,
+                1.0,
+                0.0,
+                -0.0,
+                0.0,
+                1.0
+              ],
+              "TopSurface": "Studs",
+              "BottomSurface": "Studs",
+              "LeftSurface": "Studs",
+              "RightSurface": "Studs",
+              "FrontSurface": "Studs",
+              "BackSurface": "Studs",
+              "CanCollide": false,
+              "Duration": 0,
+              "Neutral": true,
+              "Enabled": true,
+              "Transparency": 1
+            }
+          },
+          "RoadSegments": {
+            "$path": "assets/RoadSegments.rbxmx"
+          }
+        },
+        "Plot 1": {
+          "$className": "Model",
+          "Pad": {
+            "$className": "Part",
+            "$properties": {
+              "Anchored": true,
+              "Material": "Plastic",
+              "Color": [
+                0.86275,
+                0.78431,
+                0.62745
+              ],
+              "Size": [
+                280.0,
+                1.0,
+                400.0
+              ],
+              "CFrame": [
+                -480.0,
+                3.0,
+                240.0,
+                1.0,
+                0.0,
+                0.0,
+                0.0,
+                1.0,
+                0.0,
+                -0.0,
+                0.0,
+                1.0
+              ],
+              "TopSurface": "Studs",
+              "BottomSurface": "Studs",
+              "LeftSurface": "Studs",
+              "RightSurface": "Studs",
+              "FrontSurface": "Studs",
+              "BackSurface": "Studs"
+            }
+          },
+          "Spawn": {
+            "$className": "SpawnLocation",
+            "$properties": {
+              "Anchored": true,
+              "Material": "Plastic",
+              "Color": [
+                0.63922,
+                0.63529,
+                0.64706
+              ],
+              "Size": [
+                8.0,
+                1.0,
+                8.0
+              ],
+              "CFrame": [
+                -480.0,
+                3.0,
+                46.0,
+                -1.0,
+                0.0,
+                1.2246467991473532e-16,
+                0.0,
+                1.0,
+                0.0,
+                -1.2246467991473532e-16,
+                0.0,
+                -1.0
+              ],
+              "TopSurface": "Studs",
+              "BottomSurface": "Studs",
+              "LeftSurface": "Studs",
+              "RightSurface": "Studs",
+              "FrontSurface": "Studs",
+              "BackSurface": "Studs",
+              "CanCollide": false,
+              "Duration": 0,
+              "Neutral": false,
+              "Enabled": false,
+              "Transparency": 1
+            }
+          },
+          "Side": {
+            "$className": "StringValue",
+            "$properties": {
+              "Value": "North"
+            }
+          }
+        },
+        "Plot 2": {
+          "$className": "Model",
+          "Pad": {
+            "$className": "Part",
+            "$properties": {
+              "Anchored": true,
+              "Material": "Plastic",
+              "Color": [
+                0.86275,
+                0.78431,
+                0.62745
+              ],
+              "Size": [
+                280.0,
+                1.0,
+                400.0
+              ],
+              "CFrame": [
+                -160.0,
+                3.0,
+                240.0,
+                1.0,
+                0.0,
+                0.0,
+                0.0,
+                1.0,
+                0.0,
+                -0.0,
+                0.0,
+                1.0
+              ],
+              "TopSurface": "Studs",
+              "BottomSurface": "Studs",
+              "LeftSurface": "Studs",
+              "RightSurface": "Studs",
+              "FrontSurface": "Studs",
+              "BackSurface": "Studs"
+            }
+          },
+          "Spawn": {
+            "$className": "SpawnLocation",
+            "$properties": {
+              "Anchored": true,
+              "Material": "Plastic",
+              "Color": [
+                0.63922,
+                0.63529,
+                0.64706
+              ],
+              "Size": [
+                8.0,
+                1.0,
+                8.0
+              ],
+              "CFrame": [
+                -160.0,
+                3.0,
+                46.0,
+                -1.0,
+                0.0,
+                1.2246467991473532e-16,
+                0.0,
+                1.0,
+                0.0,
+                -1.2246467991473532e-16,
+                0.0,
+                -1.0
+              ],
+              "TopSurface": "Studs",
+              "BottomSurface": "Studs",
+              "LeftSurface": "Studs",
+              "RightSurface": "Studs",
+              "FrontSurface": "Studs",
+              "BackSurface": "Studs",
+              "CanCollide": false,
+              "Duration": 0,
+              "Neutral": false,
+              "Enabled": false,
+              "Transparency": 1
+            }
+          },
+          "Side": {
+            "$className": "StringValue",
+            "$properties": {
+              "Value": "North"
+            }
+          }
+        },
+        "Plot 3": {
+          "$className": "Model",
+          "Pad": {
+            "$className": "Part",
+            "$properties": {
+              "Anchored": true,
+              "Material": "Plastic",
+              "Color": [
+                0.86275,
+                0.78431,
+                0.62745
+              ],
+              "Size": [
+                280.0,
+                1.0,
+                400.0
+              ],
+              "CFrame": [
+                160.0,
+                3.0,
+                240.0,
+                1.0,
+                0.0,
+                0.0,
+                0.0,
+                1.0,
+                0.0,
+                -0.0,
+                0.0,
+                1.0
+              ],
+              "TopSurface": "Studs",
+              "BottomSurface": "Studs",
+              "LeftSurface": "Studs",
+              "RightSurface": "Studs",
+              "FrontSurface": "Studs",
+              "BackSurface": "Studs"
+            }
+          },
+          "Spawn": {
+            "$className": "SpawnLocation",
+            "$properties": {
+              "Anchored": true,
+              "Material": "Plastic",
+              "Color": [
+                0.63922,
+                0.63529,
+                0.64706
+              ],
+              "Size": [
+                8.0,
+                1.0,
+                8.0
+              ],
+              "CFrame": [
+                160.0,
+                3.0,
+                46.0,
+                -1.0,
+                0.0,
+                1.2246467991473532e-16,
+                0.0,
+                1.0,
+                0.0,
+                -1.2246467991473532e-16,
+                0.0,
+                -1.0
+              ],
+              "TopSurface": "Studs",
+              "BottomSurface": "Studs",
+              "LeftSurface": "Studs",
+              "RightSurface": "Studs",
+              "FrontSurface": "Studs",
+              "BackSurface": "Studs",
+              "CanCollide": false,
+              "Duration": 0,
+              "Neutral": false,
+              "Enabled": false,
+              "Transparency": 1
+            }
+          },
+          "Side": {
+            "$className": "StringValue",
+            "$properties": {
+              "Value": "North"
+            }
+          }
+        },
+        "Plot 4": {
+          "$className": "Model",
+          "Pad": {
+            "$className": "Part",
+            "$properties": {
+              "Anchored": true,
+              "Material": "Plastic",
+              "Color": [
+                0.86275,
+                0.78431,
+                0.62745
+              ],
+              "Size": [
+                280.0,
+                1.0,
+                400.0
+              ],
+              "CFrame": [
+                480.0,
+                3.0,
+                240.0,
+                1.0,
+                0.0,
+                0.0,
+                0.0,
+                1.0,
+                0.0,
+                -0.0,
+                0.0,
+                1.0
+              ],
+              "TopSurface": "Studs",
+              "BottomSurface": "Studs",
+              "LeftSurface": "Studs",
+              "RightSurface": "Studs",
+              "FrontSurface": "Studs",
+              "BackSurface": "Studs"
+            }
+          },
+          "Spawn": {
+            "$className": "SpawnLocation",
+            "$properties": {
+              "Anchored": true,
+              "Material": "Plastic",
+              "Color": [
+                0.63922,
+                0.63529,
+                0.64706
+              ],
+              "Size": [
+                8.0,
+                1.0,
+                8.0
+              ],
+              "CFrame": [
+                480.0,
+                3.0,
+                46.0,
+                -1.0,
+                0.0,
+                1.2246467991473532e-16,
+                0.0,
+                1.0,
+                0.0,
+                -1.2246467991473532e-16,
+                0.0,
+                -1.0
+              ],
+              "TopSurface": "Studs",
+              "BottomSurface": "Studs",
+              "LeftSurface": "Studs",
+              "RightSurface": "Studs",
+              "FrontSurface": "Studs",
+              "BackSurface": "Studs",
+              "CanCollide": false,
+              "Duration": 0,
+              "Neutral": false,
+              "Enabled": false,
+              "Transparency": 1
+            }
+          },
+          "Side": {
+            "$className": "StringValue",
+            "$properties": {
+              "Value": "North"
+            }
+          }
+        },
+        "Plot 5": {
+          "$className": "Model",
+          "Pad": {
+            "$className": "Part",
+            "$properties": {
+              "Anchored": true,
+              "Material": "Plastic",
+              "Color": [
+                0.78431,
+                0.7451,
+                0.66667
+              ],
+              "Size": [
+                280.0,
+                1.0,
+                400.0
+              ],
+              "CFrame": [
+                -480.0,
+                3.0,
+                -240.0,
+                1.0,
+                0.0,
+                0.0,
+                0.0,
+                1.0,
+                0.0,
+                -0.0,
+                0.0,
+                1.0
+              ],
+              "TopSurface": "Studs",
+              "BottomSurface": "Studs",
+              "LeftSurface": "Studs",
+              "RightSurface": "Studs",
+              "FrontSurface": "Studs",
+              "BackSurface": "Studs"
+            }
+          },
+          "Spawn": {
+            "$className": "SpawnLocation",
+            "$properties": {
+              "Anchored": true,
+              "Material": "Plastic",
+              "Color": [
+                0.63922,
+                0.63529,
+                0.64706
+              ],
+              "Size": [
+                8.0,
+                1.0,
+                8.0
+              ],
+              "CFrame": [
+                -480.0,
+                3.0,
+                -46.0,
+                1.0,
+                0.0,
+                0.0,
+                0.0,
+                1.0,
+                0.0,
+                -0.0,
+                0.0,
+                1.0
+              ],
+              "TopSurface": "Studs",
+              "BottomSurface": "Studs",
+              "LeftSurface": "Studs",
+              "RightSurface": "Studs",
+              "FrontSurface": "Studs",
+              "BackSurface": "Studs",
+              "CanCollide": false,
+              "Duration": 0,
+              "Neutral": false,
+              "Enabled": false,
+              "Transparency": 1
+            }
+          },
+          "Side": {
+            "$className": "StringValue",
+            "$properties": {
+              "Value": "South"
+            }
+          }
+        },
+        "Plot 6": {
+          "$className": "Model",
+          "Pad": {
+            "$className": "Part",
+            "$properties": {
+              "Anchored": true,
+              "Material": "Plastic",
+              "Color": [
+                0.78431,
+                0.7451,
+                0.66667
+              ],
+              "Size": [
+                280.0,
+                1.0,
+                400.0
+              ],
+              "CFrame": [
+                -160.0,
+                3.0,
+                -240.0,
+                1.0,
+                0.0,
+                0.0,
+                0.0,
+                1.0,
+                0.0,
+                -0.0,
+                0.0,
+                1.0
+              ],
+              "TopSurface": "Studs",
+              "BottomSurface": "Studs",
+              "LeftSurface": "Studs",
+              "RightSurface": "Studs",
+              "FrontSurface": "Studs",
+              "BackSurface": "Studs"
+            }
+          },
+          "Spawn": {
+            "$className": "SpawnLocation",
+            "$properties": {
+              "Anchored": true,
+              "Material": "Plastic",
+              "Color": [
+                0.63922,
+                0.63529,
+                0.64706
+              ],
+              "Size": [
+                8.0,
+                1.0,
+                8.0
+              ],
+              "CFrame": [
+                -160.0,
+                3.0,
+                -46.0,
+                1.0,
+                0.0,
+                0.0,
+                0.0,
+                1.0,
+                0.0,
+                -0.0,
+                0.0,
+                1.0
+              ],
+              "TopSurface": "Studs",
+              "BottomSurface": "Studs",
+              "LeftSurface": "Studs",
+              "RightSurface": "Studs",
+              "FrontSurface": "Studs",
+              "BackSurface": "Studs",
+              "CanCollide": false,
+              "Duration": 0,
+              "Neutral": false,
+              "Enabled": false,
+              "Transparency": 1
+            }
+          },
+          "Side": {
+            "$className": "StringValue",
+            "$properties": {
+              "Value": "South"
+            }
+          }
+        },
+        "Plot 7": {
+          "$className": "Model",
+          "Pad": {
+            "$className": "Part",
+            "$properties": {
+              "Anchored": true,
+              "Material": "Plastic",
+              "Color": [
+                0.78431,
+                0.7451,
+                0.66667
+              ],
+              "Size": [
+                280.0,
+                1.0,
+                400.0
+              ],
+              "CFrame": [
+                160.0,
+                3.0,
+                -240.0,
+                1.0,
+                0.0,
+                0.0,
+                0.0,
+                1.0,
+                0.0,
+                -0.0,
+                0.0,
+                1.0
+              ],
+              "TopSurface": "Studs",
+              "BottomSurface": "Studs",
+              "LeftSurface": "Studs",
+              "RightSurface": "Studs",
+              "FrontSurface": "Studs",
+              "BackSurface": "Studs"
+            }
+          },
+          "Spawn": {
+            "$className": "SpawnLocation",
+            "$properties": {
+              "Anchored": true,
+              "Material": "Plastic",
+              "Color": [
+                0.63922,
+                0.63529,
+                0.64706
+              ],
+              "Size": [
+                8.0,
+                1.0,
+                8.0
+              ],
+              "CFrame": [
+                160.0,
+                3.0,
+                -46.0,
+                1.0,
+                0.0,
+                0.0,
+                0.0,
+                1.0,
+                0.0,
+                -0.0,
+                0.0,
+                1.0
+              ],
+              "TopSurface": "Studs",
+              "BottomSurface": "Studs",
+              "LeftSurface": "Studs",
+              "RightSurface": "Studs",
+              "FrontSurface": "Studs",
+              "BackSurface": "Studs",
+              "CanCollide": false,
+              "Duration": 0,
+              "Neutral": false,
+              "Enabled": false,
+              "Transparency": 1
+            }
+          },
+          "Side": {
+            "$className": "StringValue",
+            "$properties": {
+              "Value": "South"
+            }
+          }
+        },
+        "Plot 8": {
+          "$className": "Model",
+          "Pad": {
+            "$className": "Part",
+            "$properties": {
+              "Anchored": true,
+              "Material": "Plastic",
+              "Color": [
+                0.78431,
+                0.7451,
+                0.66667
+              ],
+              "Size": [
+                280.0,
+                1.0,
+                400.0
+              ],
+              "CFrame": [
+                480.0,
+                3.0,
+                -240.0,
+                1.0,
+                0.0,
+                0.0,
+                0.0,
+                1.0,
+                0.0,
+                -0.0,
+                0.0,
+                1.0
+              ],
+              "TopSurface": "Studs",
+              "BottomSurface": "Studs",
+              "LeftSurface": "Studs",
+              "RightSurface": "Studs",
+              "FrontSurface": "Studs",
+              "BackSurface": "Studs"
+            }
+          },
+          "Spawn": {
+            "$className": "SpawnLocation",
+            "$properties": {
+              "Anchored": true,
+              "Material": "Plastic",
+              "Color": [
+                0.63922,
+                0.63529,
+                0.64706
+              ],
+              "Size": [
+                8.0,
+                1.0,
+                8.0
+              ],
+              "CFrame": [
+                480.0,
+                3.0,
+                -46.0,
+                1.0,
+                0.0,
+                0.0,
+                0.0,
+                1.0,
+                0.0,
+                -0.0,
+                0.0,
+                1.0
+              ],
+              "TopSurface": "Studs",
+              "BottomSurface": "Studs",
+              "LeftSurface": "Studs",
+              "RightSurface": "Studs",
+              "FrontSurface": "Studs",
+              "BackSurface": "Studs",
+              "CanCollide": false,
+              "Duration": 0,
+              "Neutral": false,
+              "Enabled": false,
+              "Transparency": 1
+            }
+          },
+          "Side": {
+            "$className": "StringValue",
+            "$properties": {
+              "Value": "South"
+            }
+          }
         }
       }
     },
