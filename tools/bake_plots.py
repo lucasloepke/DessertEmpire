@@ -112,6 +112,153 @@ def part_props(color, size, pos, yaw_degrees: float = 0.0, material: str = "Plas
     return props
 
 
+# Blocky rim mountains (Plastic/Studs). Continuous wall so you can't run off.
+ROCK = (
+    (95, 95, 100),
+    (115, 110, 105),
+    (80, 85, 90),
+    (125, 120, 115),
+    (70, 72, 78),
+)
+GRASS_TOP = (75, 154, 68)
+SNOW_TOP = (235, 240, 245)
+
+
+def build_mountains(base_size: float) -> dict:
+    """Connected blocky rim — sealed wall + pyramid slopes + 3 snow peaks."""
+    CN, PR = "$className", "$properties"
+    half = base_size / 2
+    thickness = 150
+    wall_center = half - thickness / 2
+    seg_len = 170
+    overlap = 40
+    step = seg_len - overlap
+    assert wall_center > 800
+
+    # Three landmark snow peaks, spaced so they don't blend together.
+    SNOW_PEAKS = (
+        ("West", -half * 0.85),
+        ("North", half * 0.6),
+        ("East", half * 0.15),
+    )
+
+    def near_snow(edge: str, along: float) -> float:
+        best = 0.0
+        for peak_edge, peak_along in SNOW_PEAKS:
+            if peak_edge != edge:
+                continue
+            dist = abs(along - peak_along)
+            best = max(best, max(0.0, 1.0 - dist / 200.0))
+        return best
+
+    def wall_height(edge: str, along: float, seg_i: int) -> float:
+        """Solid barrier height — always jump-proof, with mild unevenness."""
+        t = (along + half) / base_size
+        corner = max(0.0, 1.0 - min(abs(t), abs(t - 1.0)) * 7.0)
+        jagged = abs(((seg_i * 17 + len(edge) * 9) % 7) - 3) / 3.0
+        h = 48 + 14 * corner + 10 * jagged
+        h += 18 * near_snow(edge, along)
+        bias = {"North": 1.0, "South": 0.95, "East": 0.97, "West": 1.03}[edge]
+        return h * bias
+
+    folder: dict = {CN: "Folder"}
+    part_i = 0
+
+    def add_part(color, size, pos):
+        nonlocal part_i
+        part_i += 1
+        folder[f"Rock_{part_i:02d}"] = {
+            CN: "Part",
+            PR: part_props(
+                color,
+                (round(size[0], 1), round(size[1], 1), round(size[2], 1)),
+                (round(pos[0], 1), round(pos[1], 1), round(pos[2], 1)),
+                **{"Locked": True},
+            ),
+        }
+
+    def add_segment(
+        cx: float,
+        cz: float,
+        sx: float,
+        sz: float,
+        barrier_h: float,
+        slope_layers: int,
+        color_i: int,
+        snow: bool,
+        inset_dir: tuple[float, float],
+    ):
+        """Sealed base wall + stepped pyramid on top (slopes don't open gaps)."""
+        add_part(ROCK[color_i % len(ROCK)], (sx, barrier_h, sz), (cx, barrier_h / 2, cz))
+        if slope_layers <= 0:
+            return
+        ix, iz = inset_dir
+        y = barrier_h * 0.92
+        peak_budget = barrier_h * (1.8 if snow else (0.9 + 0.25 * slope_layers))
+        for layer in range(slope_layers):
+            t = (layer + 1) / (slope_layers + 1)
+            scale = 1.0 - 0.62 * ((layer + 1) / slope_layers)
+            w = sx * max(scale, 0.28)
+            d = sz * max(scale, 0.28)
+            h = peak_budget / slope_layers * (1.15 - 0.2 * layer)
+            if snow and layer == slope_layers - 1:
+                h = max(h, 32)
+            ox = ix * (22 * t) + (9 if layer % 2 else -6)
+            oz = iz * (22 * t) + (-7 if layer % 2 else 5)
+            if snow and layer >= slope_layers - 2:
+                color = SNOW_TOP
+            elif layer == slope_layers - 1:
+                color = GRASS_TOP
+            else:
+                color = ROCK[(color_i + layer + 1) % len(ROCK)]
+            add_part(color, (w, h, d), (cx + ox, y + h / 2, cz + oz))
+            y += h * 0.85
+
+    edges = (
+        ("North", "x", wall_center, (0.0, -1.0)),
+        ("South", "x", -wall_center, (0.0, 1.0)),
+        ("East", "z", wall_center, (-1.0, 0.0)),
+        ("West", "z", -wall_center, (1.0, 0.0)),
+    )
+    for edge_i, (edge, axis, fixed, inset) in enumerate(edges):
+        start = -half + seg_len / 2
+        end = half - seg_len / 2
+        along = start
+        seg_i = 0
+        while along <= end + 0.01:
+            snow_amt = near_snow(edge, along)
+            is_snow = snow_amt > 0.5
+            h = wall_height(edge, along, seg_i)
+            t = (along + half) / base_size
+            midness = 1.0 - abs(t - 0.5) * 2.0
+
+            if is_snow:
+                layers = 5
+                h = max(h, 70)
+            elif midness > 0.25:
+                # Flatter mid-edge stretches get real pyramid slopes.
+                layers = 4 if (midness > 0.45 or seg_i % 2 == 0) else 3
+            else:
+                layers = 3 if seg_i % 2 == 0 else 2
+
+            # Keep barrier fat enough that overlaps never open a gap.
+            fat = thickness * (1.0 + (0.06 if seg_i % 2 == 0 else -0.02))
+            long = seg_len * (1.0 + (0.04 if seg_i % 3 == 0 else 0.0))
+            if is_snow:
+                fat *= 1.2
+                long *= 1.12
+
+            color_i = seg_i + edge_i * 3
+            if axis == "x":
+                add_segment(along, fixed, long, fat, h, layers, color_i, is_snow, inset)
+            else:
+                add_segment(fixed, along, fat, long, h, layers, color_i, is_snow, inset)
+            along += step
+            seg_i += 1
+
+    return folder
+
+
 def find_road_export() -> Path | None:
     for name in ("Road.rbxmx", "Road.rbxm", "road.rbxmx", "road.rbxm"):
         path = ASSETS / name
@@ -473,6 +620,7 @@ def main():
             "BottomSurface": "Smooth",
         },
     }
+    workspace["Mountains"] = build_mountains(base_size)
     workspace["Plots"] = {CN: "Folder", **plots}
 
     # Keep a single template in ReplicatedStorage for runtime fallback / future use.

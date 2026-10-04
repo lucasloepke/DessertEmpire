@@ -123,12 +123,20 @@ end
 
 -- Short effect line for holograms: "x2 sales", "x2 sell speed", ...
 function StationMath.describeEffect(config: any, upgrade: any): string
-	if upgrade.Automates then
+	if typeof(upgrade.Subtitle) == "string" then
+		return upgrade.Subtitle
+	elseif upgrade.Automates then
 		return "auto sells"
 	elseif upgrade.SpeedMultiplier then
 		return string.format("x%g sell speed", upgrade.SpeedMultiplier)
 	elseif upgrade.PayoutMultiplier then
 		return string.format("x%g sales", upgrade.PayoutMultiplier)
+	end
+	-- Gate step: no income effect, opens a later tier.
+	for _, entry in ipairs(TycoonConfig.Stations) do
+		if table.find(entry.UnlockRequires or {}, upgrade.Id) then
+			return "unlocks " .. entry.DisplayName
+		end
 	end
 	return ""
 end

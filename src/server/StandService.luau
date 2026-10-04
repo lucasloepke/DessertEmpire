@@ -217,6 +217,24 @@ local function spawnTemplateModel(parent: Instance, name: string, visual: any, r
 	return model
 end
 
+--[[
+	Mark a model for the client's CartTraffic: it drives toward the street on
+	sales. depart (optional, Visual.Depart) = { Group, Station, Distance,
+	Cooldown }: models sharing a Group move together, triggered by Station's
+	sales (default: the station that owns the model).
+]]
+local function markDeparts(model: Model, record: StandRecord, depart: any?)
+	local sign = if record.frame.isNorth then 1 else -1
+	model:SetAttribute("Departs", true)
+	model:SetAttribute("DepartDirection", Vector3.new(0, 0, -sign))
+	if depart then
+		model:SetAttribute("DepartGroup", depart.Group)
+		model:SetAttribute("DepartStation", depart.Station)
+		model:SetAttribute("DepartDistance", depart.Distance)
+		model:SetAttribute("DepartCooldown", depart.Cooldown)
+	end
+end
+
 -- animate = just purchased (drop in from the sky); false when rebuilding on join.
 local function spawnUpgradeVisual(folder: Instance, upgrade: any, record: StandRecord, ownerName: string, animate: boolean)
 	local visual = upgrade.Visual
@@ -225,6 +243,10 @@ local function spawnUpgradeVisual(folder: Instance, upgrade: any, record: StandR
 		model.Name = upgrade.Id
 		if visual.ModelTemplate then
 			local npc = spawnTemplateModel(model, "NPC", visual, record)
+			if npc and visual.Depart and not visual.DepartingParts then
+				-- An NPC-only visual with Depart rides along with its group.
+				markDeparts(npc, record, visual.Depart)
+			end
 			if npc and animate then
 				markDrop(npc, TycoonConfig.DropIn.NpcDelay)
 			end
@@ -242,9 +264,7 @@ local function spawnUpgradeVisual(folder: Instance, upgrade: any, record: StandR
 			for _, partVis in ipairs(visual.DepartingParts) do
 				spawnVisualPart(cart, partVis.Name, partVis, record)
 			end
-			local sign = if record.frame.isNorth then 1 else -1
-			cart:SetAttribute("Departs", true)
-			cart:SetAttribute("DepartDirection", Vector3.new(0, 0, -sign))
+			markDeparts(cart, record, visual.Depart)
 			cart.Parent = model
 		end
 		if animate then

@@ -29,12 +29,14 @@ Each new tier is a new station with a bigger payout, sitting alongside the old o
 ## The spend flow (same for every station)
 
 1. **Panel UPGRADE** — the button under SELL on the floating panel. Repeatable forever. Each level multiplies payout by `PayoutGrowth` (×1.25); its price multiplies by `CostGrowth` (×1.6) each time. This is the always-available money sink.
-2. **Physical upgrades** — walk-on floor buttons next to the station. Default unlock is in list order; an upgrade can set `Requires = { ids }` to appear earlier/in parallel. Each available upgrade gets its own button. Each adds a visible model and one big effect: `PayoutMultiplier` (e.g. ×2, ×3) or `SpeedMultiplier` (e.g. ×2 sell speed, which halves duration).
+2. **Physical upgrades** — walk-on floor buttons next to the station. Default unlock is in list order; an upgrade can set `Requires = { ids }` to appear earlier/in parallel. Each available upgrade gets its own button. Each adds a visible model and one big effect: `PayoutMultiplier` (e.g. ×2, ×3) or `SpeedMultiplier` (e.g. ×2 sell speed, which halves duration). The one exception is a **gate step** (below).
+   - **Gate steps** — cheap physical upgrades with *no* income effect that prepare the ground for a later tier (Parking Lot → Cooler Cart, Ice Cream Truck Lot → Ice Cream Truck, Parlor Land → Parlor). The next tier's `UnlockRequires` lists the gate step, so it's a required stop, priced low (≈ ¼ of the tier it opens) so it never feels like a wall. Hologram subtitle is `Subtitle` if set, else "unlocks {next tier}".
 3. **Employee** — physical upgrade with `Automates = true`: the bar clicks itself forever. It unlocks partway down the list, not last: tier 1 Cashier with Deep Freezer (`Requires = { "BiggerCooler" }`), tier 2 Cart Manager as soon as the Cooler Cart exists (`Requires = {}`, same time as Second Cart).
 4. **Next tier unlock** — a floor button owned by the current station but placed on the spot where the next station will stand (`Placement`). It appears once the current station owns every id in the next station's `UnlockRequires`, so the next tier's path is visible *before* the employee is bought. Buying it builds the next station.
 
 ## Core design rules (settled, don't re-propose alternatives)
 
+- **Always a next upgrade within reach.** At every point the player should see at least one floor button they can afford soon — no long dead stretches saving for one big buy. When a gap opens between prices, fill it with a bite-sized physical step (or a gate step for the next tier) rather than lowering the big price.
 - **Every station is manual first.** The player clicks it themselves; the employee automates it.
 - **Every station follows the spend flow above.** Panel upgrade + physical upgrades (ordered unless `Requires` says otherwise) including an employee. Don't invent per-station mechanics.
 - **The panel upgrade is payout only.** Speed comes only from physical upgrades, so each lever has one obvious source.
@@ -48,7 +50,7 @@ Each new tier is a new station with a bigger payout, sitting alongside the old o
 - All progression numbers live in one shared config module. No magic numbers in systems code.
 - **Server is authoritative** for all money and station state. Clients send requests only; the server independently re-validates ownership, distance, cooldown, and affordability on every one. An automated station's timer runs on the server, not in the client's bar.
 - **No far-away `$` icon** over the stand. Purchase text holograms are distance-gated; the far marker was cut.
-- **Things only exist once bought.** No pre-built empty slots, lots or outlines: an upgrade's whole visual (including its ground, e.g. a parking spot's asphalt) appears on purchase. Before that, only its floor button is there, standing where the thing will appear.
+- **Things only exist once bought.** No pre-built empty slots, lots or outlines: an upgrade's whole visual (including its ground, e.g. the Parking Lot's asphalt) appears on purchase. Before that, only its floor button is there, standing where the thing will appear.
 - **Every purchase lands.** Anything bought or built falls in from the sky with a small hop and the block-place sound; NPCs land just after their props with the block sound plus a louder villager line, then chatter randomly. Not replayed on join/rebuild.
 - **Decoration never touches income.** Cart traffic, NPC chatter, drop-ins and customers are client-side flavour on top of the payout ÷ duration loop.
 
@@ -71,15 +73,15 @@ Each is one station, following the model above, with a bigger payout than the la
 
 | Tier | Station | Status | Planned physical flavor (not numbered yet) |
 | --- | --- | --- | --- |
-| 1 | Popsicle stand | **Built** | Cooler → Freezer + Cashier → Dispenser → Neon Sign |
-| 2 | Cooler cart | **Built** | Fleet carts + Cart Manager (lot asphalt per cart) |
-| 3 | Ice cream truck | Placeholder (`UnlockCost` only) | Speakers, side window, string lights, paint/wrap, menu board; **Driver** automates. Truck can arrive incomplete (chassis → body → window → lights) rather than as one dump. |
-| 4 | Parlor | Not started | Toppings bar, booths, second floor, décor/signage, marketing bits (sandwich board, awning, posters); **employees** automate. Build the room in steps (foundation / walls / roof / interior) before stuffing it with amenities. |
+| 1 | Popsicle stand | **Built** | Cooler → Freezer + Cashier → Dispenser → Neon Sign; gate steps Parking Lot (tier 2) and Parlor Land (tier 4) |
+| 2 | Cooler cart | **Built** | Fleet carts + Cart Manager on the Parking Lot; gate steps Ice Cream Truck Lot + Old Truck (tier 3) |
+| 3 | Ice cream truck | **Built** | Old Truck fixed up piece by piece: paint → tires + Driver → serving window → speakers → menu board → giant cone → string lights. Stands on the Ice Cream Truck Lot. |
+| 4 | Parlor | Placeholder (`UnlockCost` only); land built (stand gate step) | Builds on Parlor Land, right of the stand. Toppings bar, booths, second floor, décor/signage, marketing bits (sandwich board, awning, posters); **employees** automate. Build the room in steps (foundation / walls / roof / interior) before stuffing it with amenities. |
 | 5 | Dessert factory | Not started | **Build piece by piece:** 1. frame, 2. walls, 3. roof, then industrial freezer, industrial packager, second conveyor belt, packing station, etc. One station, many bite-sized buys — the building grows on the plot. |
 | 6 | Loading dock | Not started | Connected to the factory. Dock bay / canopy / ramp as separate steps; semi trucks that pull in (decoration, like cart traffic); more bays or fleet trucks as payout/speed ups; a dock worker / dispatcher automates. |
 | 7+ | Second wing / prestige | Not started | Later. Prestige is a supporting system, not a station mechanic change. |
 
-Tiers 3–6 are direction only: upgrade names and build order will get real costs / `Requires` / placements when we design each tier. Until then, don't invent numbers in systems code.
+Tiers 4–6 are direction only: upgrade names and build order will get real costs / `Requires` / placements when we design each tier. Until then, don't invent numbers in systems code.
 
 ## Supporting systems (not built yet)
 
@@ -101,6 +103,8 @@ The canonical station. Click SELL, a **1.5-second** bar runs, it pays $5. UPGRAD
 | 3 | Pop Dispenser | $4,000 | ×2 sell speed | pink box on counter (right; old register spot) | after Freezer |
 | 4 | Cashier | $10,000 | automates | Creator Store `Cashier` NPC behind counter + register on counter center facing employee | after Cooler (`Requires = { "BiggerCooler" }`, same time as Freezer) |
 | 5 | Neon Sign | $150,000 | ×2 sales | neon board mounted on the **street-facing front of the counter** (not above it); SurfaceGui `{DisplayName}'s Popsicles!` (`Material = "Neon"` is the one exception to the Plastic placeholder rule) | after Cashier + Dispenser (`Requires`) — cooler-cart mid-game return sink |
+| 6 | Parking Lot | $2,500 | none (gate step: Cooler Cart `UnlockRequires`) | asphalt left of the stand, stand-space X −56…−16, sidewalk (Z −10) back to Z 30; back planter + bushes, right curb, two street lamps, blue `PARKING` sign; button at lot center (−36, 10) | after Cooler (`Requires = { "BiggerCooler" }`) |
+| 7 | Parlor Land | $25,000 | none (gate step for tier 4, `Subtitle = "parlor coming soon"`) | roped-off dirt lot right of the stand, X 16…60, Z −10…30; corner stakes, lumber pile, `{Player}'s Parlor - Coming Soon` sign; button at (38, 10) | after Cashier (`Requires = { "Cashier" }`) — fills the $10K→$40K gap at tier 2 start |
 
 Cashier arrival: clones `ReplicatedStorage.Cashier` as an anchored prop (no nameplates, no physics), feet on the pad; it drops in like every other purchase (below), landing just after its register. Cash register uses `FaceEmployee`; NPC faces the street.
 
@@ -108,15 +112,15 @@ Cashier arrival: clones `ReplicatedStorage.Cashier` as an anchored prop (no name
 
 Neon Sign is intentional dead-content prevention: the button shows once the early stand is complete, but $150K sits between cooler-cart Second ($40K) and Third ($200K), so players duck back to the stand after a bit of cart progress. Visual parts use `FaceStreet`; the neon face sets `Label = "{Player}'s Popsicles!"` (substituted with `player.DisplayName` in `StandService`).
 
-Simulated pacing at **BaseDuration = 1.5** (player clicks every cycle, buys the cheapest affordable thing incl. panel levels): Cooler ~0.8 min, Freezer ~1.8, Dispenser ~2.3, Cashier ~2.7 (~$1.1K/s). That's fast — tier 1 may want a retune. The sim predates the Neon Sign, so re-run it with the sign before trusting tier-2 minute marks. Tier 2 unlock is $10,000 to match the Cashier.
+Simulated pacing (`tools/pacing_sim.luau`, greedy player, no walking — see Unverified / open): Cooler 0.8 min, Freezer 1.8, Parking Lot 2.1, Dispenser 2.5, Cooler Cart 2.9, Cashier 3.3. Tier 2 unlock is $10,000 to match the Cashier.
 
 What it does not have, on purpose: mold trays, pouring, stock, customer arrivals, queues, ProximityPrompts, floating status text, far-away `$` stand icon. All were tried and cut.
 
 ## Tier 2 — cooler cart
 
-One cooler cart left of the popsicle stand (when facing the road), with a three-spot parking lot further left that fills with carts — a fleet of four. Parked carts are rotated nose-to-street; every cart has four corner wheels. Click SELL (on the first cart), a **4-second** bar runs, it pays $150. UPGRADE starts at $300 (×1.6 cost / ×1.25 payout, same as tier 1).
+One cooler cart left of the popsicle stand (when facing the road), on the Parking Lot (tier 1 gate step), with three fleet spots further left that fill with carts — a fleet of four. Parked carts are rotated nose-to-street; every cart has four corner wheels. Click SELL (on the first cart), a **4-second** bar runs, it pays $150. UPGRADE starts at $300 (×1.6 cost / ×1.25 payout, same as tier 1).
 
-Unlock: a $10,000 floor button on the cart's spot, shown once Bigger Cooler is owned (`UnlockRequires = { "BiggerCooler" }`), i.e. alongside the Cashier, so the tier 2 path is visible before automating tier 1. Nothing of the lot exists at unlock: each spot's asphalt segment (back of the lot → sidewalk, painted lines over the parking part) arrives with that spot's cart upgrade. Buttons sit on the bare plot where the spot will be.
+Unlock: a $10,000 floor button on the cart's spot, shown once the stand owns the Parking Lot (`UnlockRequires = { "ParkingLot" }`; the lot itself needs Bigger Cooler), so the tier 2 path is still visible before automating tier 1. The Parking Lot paves the whole area; each fleet cart upgrade adds its cart plus that spot's painted lines.
 
 | # | Upgrade | Cost | Effect | Visual / button | Unlock |
 | --- | --- | --- | --- | --- | --- |
@@ -124,12 +128,35 @@ Unlock: a $10,000 floor button on the cart's spot, shown once Bigger Cooler is o
 | 2 | Cart Manager | $40,000 | automates | desk (clipboard, sign) right of the first cart + `Cashier` NPC behind it; button on the desk spot | start (`Requires = {}`, same time as Second) |
 | 3 | Third Cart | $200,000 | ×2 sell speed | lot spot 2 | after Second |
 | 4 | Fourth Cart | $1,000,000 | ×3 sales | lot spot 3 | after Third |
+| 5 | Ice Cream Truck Lot | $10,000 | none (gate step, `Subtitle = "trucks coming soon"`) | second asphalt section extending the Parking Lot left, stand-space X −100…−56, same depth, same planter/lamps, left curb, `TRUCKS` sign; button at its center | after Second (`Requires = { "SecondCart" }`, so tier 2 is played before the truck path opens) |
+| 6 | Old Truck | $15,000 | none (gate step: Ice Cream Truck `UnlockRequires`, `Subtitle = "fixer-upper"`) | rusty faded truck on the Truck Lot: body, cab, grimy windshield, dark empty window, rust patches, four flat tires; button where it will stand | after Truck Lot |
 
-Layout (station space, X across with −X = left facing the road, Z away from the street): first cart at `Placement = (-26, 0, 0)` from the stand counter, serving with its long side along the street. Lot spots at cart-relative X −8 / −16 / −24, 8 wide; parked carts sit at Z 1.5; asphalt runs from Z 6 to the plot edge at Z −10 (`TycoonConfig.StationStreetInset`). Manager desk at X +6. Cart Manager reuses the `ReplicatedStorage.Cashier` model.
+Layout (station space, X across with −X = left facing the road, Z away from the street): first cart at `Placement = (-26, 0.2, 0)` from the stand counter (lifted onto the 0.2-stud asphalt, so cart-relative Y 0 = asphalt top), serving with its long side along the street. Lot spots at cart-relative X −8 / −16 / −24, 8 wide; parked carts sit at Z 1.5; spot lines run Z −2…6. Manager desk at X +6. Cart Manager reuses the `ReplicatedStorage.Cashier` model. Lot sizes / colours are the `LOT_*`, `PARKING_LOT`, `TRUCK_LOT`, `PARLOR_LAND` locals at the top of `TycoonConfig`.
 
-Cart Manager cost = placeholder tier-3 Ice Cream Truck `UnlockCost = 40000` (`UnlockRequires = { "SecondCart" }`, no `Placement` → never built). Old sim (Manager at $500K after Second) is stale — re-run before trusting minute marks.
+Cart Manager cost = tier-3 Ice Cream Truck `UnlockCost = 40000` (`UnlockRequires = { "OldTruck" }`).
 
 Cart traffic (decoration only, `client/CartTraffic.luau`, numbers in `TycoonConfig.CartTraffic`): each tier-2 sale sends one parked fleet cart (`Visual.DepartingParts`, built as a `Cart` sub-model tagged `Departs` so the asphalt stays put) up its driveway toward the sidewalk while fading out, then it fades back in and rolls into its spot (~3.4s). Round-robin, max one cart away at a time (`MaxAway`) so the fleet stays readable from the plot entrance. Animated only on the owner's client; carts still dropping in are skipped.
+
+## Tier 3 — ice cream truck
+
+The Old Truck (cooler-cart gate step) gets fixed up into a working ice cream truck, parked **nose-to-street** (18 long × 8 wide, ~10 tall; serving window on the side facing the parking lot). Unlock ($40,000, button where the kiosk will stand) opens a little order **kiosk** beside the truck: pink counter (the station `Counter`, so the SELL panel lives here) with an umbrella, a freezer and a cardboard `OPEN` sign. The kiosk never moves; the truck drives off and comes back. Sells manually right away. Click SELL, a **6-second** bar runs, it pays $2,000. UPGRADE starts at $4,000 (×1.6 / ×1.25).
+
+| # | Upgrade | Cost | Effect | Visual (covers / adds) | Unlock |
+| --- | --- | --- | --- | --- | --- |
+| 1 | Fresh Paint | $60,000 | ×1.5 sales | cream body shell + pink cab (lower, roof, pillars) + pink stripe over the rusty body | start |
+| 2 | New Tires | $120,000 | ×1.5 sales | four tires + hubcaps over the flats | after Paint |
+| 3 | Driver | $200,000 | automates | `Cashier` NPC standing in the cab behind the wheel, visible through the open window band; rides along when the truck drives off | after Paint (`Requires = { "FreshPaint" }`, with Tires) |
+| 4 | Serving Window | $400,000 | ×2 sell speed | pink window frame + dark opening + striped awning on the kiosk side | after Tires (`Requires`) |
+| 5 | Jingle Speakers | $800,000 | ×1.5 sales | roof rack + two horn speakers facing the street | after Window |
+| 6 | Menu Board | $1,500,000 | ×1.5 sales | `MENU` board on the kiosk front, over the cardboard OPEN sign (stays when the truck leaves) | after Speakers |
+| 7 | Giant Cone | $3,000,000 | ×2 sales | cone + two scoops + cherry on the roof | after Menu |
+| 8 | String Lights | $6,000,000 | ×2 sales | bulb strands along both roof edges | after Cone |
+
+Full multiplier stack ×40.5 (tier 1 ×24, tier 2 ×12). Driver cost = placeholder tier-4 Parlor `UnlockCost = 200000` (`UnlockRequires = { "Driver" }`, no `Placement`).
+
+Geometry is in **truck space** (`TRUCK_ORIGIN` = footprint center on the asphalt at stand-space (−84, 0.2, 2); X across, serving window on +X; Z along the truck, cab/nose at −Z toward the street). The kiosk is `TRUCK_COUNTER` = (9, 0, 4) in truck space; `TRUCK_PLACEMENT` = origin + kiosk. `truckPart(owner, …)` converts to offsets relative to the owning station (cooler cart for the Old Truck, the kiosk for everything else). **Fix-ups never delete old parts**: each new piece fully contains the shabby one it replaces (paint shell 0.1–0.2 larger than each body/cab piece, tires larger than the flats, menu board around the OPEN sign). Parts that must stay visible through the paint (grille, window hole) poke past the shell. Keep that containment when moving anything.
+
+Truck traffic (decoration, same `client/CartTraffic.luau`): every truck piece (`truckVisual(...)` = `DepartingParts` + `Depart = TRUCK_DEPART`; the Driver NPC via `Visual.Depart`) carries `DepartGroup = "Truck"`, `DepartStation = "IceCreamTruck"`, `DepartDistance = 22`, `DepartCooldown = 15`. CartTraffic groups models by `DepartGroup` (per plot) and moves them as one vehicle on that station's sales — so the Old Truck, owned by the cooler cart, rides with the truck's sales and never with the cart's. Cooldown = at most one trip per 15 s so the lone truck is parked most of the time. Verified in a playtest: leaves every ~15 s, 22 studs, driver rides along, kiosk stays.
 
 ## Current implementation state
 
@@ -147,11 +174,14 @@ Working:
 - Music shuffles `Workspace.Sounds.Music`; bottom-right box is a vertical volume slider (bottom = 0)
 - Hold Left Shift to sprint (WalkSpeed 16→25, FOV 70→82); tunables in `TycoonConfig.Sprint`
 - Temporary admin HUD (left side): `+$1K`, `+$50K`, and **Reset Progress** — Studio always; live = place CreatorId + `TycoonConfig.Admin.UserIds`. Server re-checks; sets `AdminEnabled` attribute.
-- Multiple stations per plot: `TycoonConfig.Stations[i].Placement` positions each station; tier 2 cooler cart built (unlock button lives on the previous station). Client panel follows the nearest station within range (one panel, never two overlapping).
-- Tier 2: cooler cart, per-spot parking lot, Cart Manager desk, decorative cart traffic.
+- Multiple stations per plot: `TycoonConfig.Stations[i].Placement` positions each station; tiers 2–3 built (unlock button lives on the previous station, at the next station's `Placement`). Client panel follows the nearest station within range (one panel, never two overlapping).
+- Tier 2: cooler cart, fleet spots on the Parking Lot, Cart Manager desk, decorative cart traffic.
+- Gate steps: Parking Lot (stand, gates tier 2), Ice Cream Truck Lot (cart, gates tier 3), Parlor Land (stand, for tier 4). Purchases + drop-ins verified in a Studio playtest on a North plot. `PlayerData.sanitize` grants a tier's `UnlockRequires` on the previous station when that tier is already unlocked (old saves get the Parking Lot).
 - Drop-in on every purchase (block-place sound; NPCs add a loud villager line) and random NPC chatter — verified in a Studio playtest.
 
-Not built yet: everything past tier 2, offline earnings.
+- Tier 3: Old Truck gate step + Ice Cream Truck station with 8 fix-up upgrades; every purchase verified in a Studio playtest (North plot), bare Old Truck and fully upgraded truck screenshotted.
+
+Not built yet: everything past tier 3, offline earnings.
 
 ### Toolchain
 
@@ -196,7 +226,7 @@ src/client/     → StarterPlayer.StarterPlayerScripts.Client
   StationPanel.luau   — SELL bar (countdown while running) + UPGRADE button; follows the nearest station
                         on your plot; sale/upgrade sound hooks
   Sprint.luau         — hold Left Shift to sprint (speed + FOV; TycoonConfig.Sprint)
-  CartTraffic.luau    — decorative fleet carts driving off / back on each sale
+  CartTraffic.luau    — decorative fleet carts / the ice cream truck driving off and back on sales
   DropIn.luau         — purchased builds fall from the sky + land sound
   NpcChatter.luau     — NPCs say random voice lines
 
@@ -209,6 +239,7 @@ assets/
   before a full Rojo rebuild or it can be lost.
 
 tools/bake_plots.py     — rebuilds Workspace.Plots + RoadSegments from config + Road.rbxmx
+tools/pacing_sim.luau   — greedy-player pacing sim; paste into Studio (Edit) — reads live Shared config
 ```
 
 ### Saves / data
@@ -221,7 +252,7 @@ tools/bake_plots.py     — rebuilds Workspace.Plots + RoadSegments from config 
   - `StationAction` — `"Sell" | "Upgrade", stationId`. Server re-checks ownership, distance, busy, affordability.
   - `AdminAction` — `"ResetProgress" | "AddCash" | "AddCashLarge"`. Server re-checks admin gate; amounts from `TycoonConfig.Admin` (`AddCashAmount` = 1000, `AddCashAmountLarge` = 50000).
 - Physical upgrades and tier unlocks are walk-on (server Touched), no remote. Button attribute `Kind` = `PhysicalUpgrade` (with `UpgradeId`) or `StationUnlock` (with `StationId` = the tier being unlocked; the button is a child of the previous station's model and re-validated via `StationMath.nextUnlock`).
-- Decoration markers (server sets, clients read): CollectionService tags `DropIn` (attributes `DropAt`, `DropDelay`, `DropParts`) and `Npc`; fleet cart sub-models named `Cart` with attributes `Departs` + `DepartDirection`.
+- Decoration markers (server sets, clients read): CollectionService tags `DropIn` (attributes `DropAt`, `DropDelay`, `DropParts`) and `Npc`; departing sub-models named `Cart` (and the truck Driver NPC) with attributes `Departs` + `DepartDirection`, plus optional `DepartGroup` / `DepartStation` / `DepartDistance` / `DepartCooldown` (from `Visual.Depart`).
 - Cash / plot index via Player attributes. `AdminEnabled` marks who sees the admin HUD. `Plot` is an ObjectValue on the Player; station models are its children with a `StationId` attribute. Station state (`CycleStartedAt`/`CycleEndsAt` server time, `Payout`, `Duration`, `Level`, `UpgradeCost`, `Automated`, `SaleCount`) is attributes on the station model.
 
 ### World / plot layout (settled)
@@ -280,8 +311,12 @@ Each plot Model: `Pad` (Part), `Spawn` (SpawnLocation on the sidewalk), `Side` (
 
 - Automated stations keep the full panel (bar shows countdown while running, else `AUTO`) because UPGRADE still lives there. Revisit if it feels cluttered.
 - Pacing: tier 1 is fully bought by ~2.7 min in the sim — likely too fast. The sim (an ad-hoc script, not in `tools/`) doesn't include the Neon Sign; re-run before trusting tier-2 minute marks or retuning.
-- Nothing past tier 2 is designed in **numbers** yet (tier 3 Ice Cream Truck is a placeholder with `UnlockCost = 40000` matching Cart Manager, no `Placement`, no physical upgrades). Flavor roadmap for tiers 3–6 lives under **Tier ladder** — costs / unlocks TBD when each tier is built.
+- Nothing past tier 3 is designed in **numbers** yet (tier 4 Parlor is a placeholder with `UnlockCost = 200000` matching the Driver, no `Placement`, no physical upgrades). Flavor roadmap for tiers 4–6 lives under **Tier ladder**.
+- **Pacing runs away (whole economy, not tier 3 specifically).** `tools/pacing_sim.luau` (run in Studio Edit mode; it requires the live `Shared` modules) has a greedy player finish all of tiers 1–3 in ~16 min at ~$590K/s. The driver is panel levels: by the end tier 1 is L29 (×646 payout), cart L22, truck L16 — each station's panel cost doesn't scale with *total* income, so later stations fund cheap early panel levels. Real players walk and won't play optimally, but this still needs a deliberate retune (panel cost growth, base costs, or tier payouts) before tier 4.
+- Tier 4 unlock is linear (`nextUnlock` = the *truck* offers the Parlor), but the Parlor's ground is the *stand's* Parlor Land. When building tier 4, either the truck's unlock should also check `PopsicleStand.owned.ParlorLand` (cross-station requires) or Parlor Land should be the first Parlor upgrade.
 - Tier 2 has been played in Studio (unlock, purchases), and drop-in + landing sounds were verified in a playtest, but the parking lot geometry, cart traffic and Cart Manager desk haven't been deliberately checked on both North and South plots.
+- Gate steps (Parking Lot, Ice Cream Truck Lot, Parlor Land) are only checked on a North plot. "Right of the stand" uses the project convention (+X = right when *facing the road*), so from the sidewalk spawn, looking into the plot, Parlor Land appears on the **left**; flip `PARLOR_LAND` if the opposite was meant.
+- Pacing with gate steps is unsimulated: the Parking Lot adds a $2.5K stop before the $10K cart unlock; Parlor Land ($25K) and the Ice Cream Truck Lot ($10K) are zero-income buys in the early tier-2 window. Tier 2 still jumps $200K → $1M with nothing in between once the Neon Sign is bought.
 - Door-open purchase sound + block-place landing sound both play on physical purchases. Keep, or mute the door sound for physical buys?
 - Cart traffic is owner-client only; other players see parked carts. Drop-ins and NPC chatter are visible/audible to everyone.
 - Plot pads are Plastic/Studs placeholders — boardwalk art later.

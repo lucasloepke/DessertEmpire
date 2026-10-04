@@ -186,41 +186,111 @@ local function cartParts(prefix: string, x: number, y: number, z: number, includ
 end
 
 --[[
-	Cooler cart parking lot, left of the first cart. Each spot is its own
-	asphalt segment (from the back of the lot all the way to the sidewalk) with
-	painted lines, and arrives with that spot's cart upgrade.
-	Spot centers are station-space X; parked carts sit at LOT_PARK_Z.
+	Lots are gate steps: cheap, no income effect, required before the next
+	tier unlocks. Each is one asphalt section from the sidewalk deep into the
+	plot (stand-space X left..right). The Parking Lot (bought on the stand)
+	holds the cooler cart, its fleet spots and the manager desk; the Ice Cream
+	Truck Lot (bought on the cooler cart) extends it further left.
+	Stations standing on a lot are lifted LOT_HEIGHT (their Placement Y).
 ]]
 local LOT_HEIGHT = 0.2
-local LOT_SPOTS = { -8, -16, -24 }
-local LOT_SPOT_WIDTH = 8
-local LOT_BACK_Z = 6
 local LOT_FRONT_Z = -TycoonConfig.StationStreetInset
-local LOT_PARK_Z = 1.5
--- Painted lines cover the parking part only; the stretch to the sidewalk is plain asphalt.
-local LOT_LINE_FRONT_Z = -2
+local LOT_BACK_Z = 30
+local PARKING_LOT = { Left = -56, Right = -16 }
+local TRUCK_LOT = { Left = -100, Right = -56 }
+local COOLER_CART_PLACEMENT = Vector3.new(-26, LOT_HEIGHT, 0)
+
 local ASPHALT_COLOR = Color3.fromRGB(70, 70, 76)
 local LINE_COLOR = Color3.fromRGB(240, 240, 240)
+local CURB_COLOR = Color3.fromRGB(205, 205, 210)
+local PLANTER_COLOR = Color3.fromRGB(120, 85, 55)
+local BUSH_COLOR = Color3.fromRGB(70, 160, 70)
+local POLE_COLOR = Color3.fromRGB(60, 60, 66)
+local LAMP_COLOR = Color3.fromRGB(255, 225, 140)
+local LOT_SIGN_COLOR = Color3.fromRGB(40, 90, 200)
 
-local function lotSegmentParts(spot: number)
-	local x = LOT_SPOTS[spot]
-	local half = LOT_SPOT_WIDTH / 2
-	local lineLength = LOT_BACK_Z - LOT_LINE_FRONT_Z - 0.4
-	local lineZ = (LOT_BACK_Z + LOT_LINE_FRONT_Z) / 2
-	local function line(name: string, lineX: number)
-		return { Name = name, Size = Vector3.new(0.4, 0.05, lineLength), Offset = Vector3.new(lineX, LOT_HEIGHT, lineZ), Color = LINE_COLOR }
+--[[
+	One lot section. origin = the owning station's Placement (visual offsets are
+	relative to it). curbX = stand-space X of the outer side curb. The curb
+	stops short of the sidewalk so the lot's front stays open.
+]]
+local function lotSectionParts(lot: { Left: number, Right: number }, origin: Vector3, curbX: number, signLabel: string, signX: number)
+	local function at(x: number, y: number, z: number): Vector3
+		return Vector3.new(x, y, z) - origin
 	end
+	local width = lot.Right - lot.Left
+	local centerX = (lot.Left + lot.Right) / 2
+	local planterZ = LOT_BACK_Z - 1
+	local curbFrontZ = LOT_FRONT_Z + 8
 
 	local parts = {
 		{
 			Name = "Asphalt",
-			Size = Vector3.new(LOT_SPOT_WIDTH, LOT_HEIGHT, LOT_BACK_Z - LOT_FRONT_Z),
-			Offset = Vector3.new(x, 0, (LOT_BACK_Z + LOT_FRONT_Z) / 2),
+			Size = Vector3.new(width, LOT_HEIGHT, LOT_BACK_Z - LOT_FRONT_Z),
+			Offset = at(centerX, 0, (LOT_BACK_Z + LOT_FRONT_Z) / 2),
 			Color = ASPHALT_COLOR,
 		},
-		-- Lines sit just inside the segment so a lone segment has no overhang.
-		line("LineLeft", x - half + 0.2),
+		{ Name = "BackPlanter", Size = Vector3.new(width, 0.8, 2), Offset = at(centerX, LOT_HEIGHT, planterZ), Color = PLANTER_COLOR },
+		{
+			Name = "SideCurb",
+			Size = Vector3.new(1, 0.6, planterZ - 1 - curbFrontZ),
+			Offset = at(curbX, LOT_HEIGHT, (planterZ - 1 + curbFrontZ) / 2),
+			Color = CURB_COLOR,
+		},
+		{ Name = "SignPole", Size = Vector3.new(0.4, 5, 0.4), Offset = at(signX, LOT_HEIGHT, LOT_FRONT_Z + 4), Color = POLE_COLOR },
+		{
+			Name = "SignBoard",
+			Size = Vector3.new(math.max(3, #signLabel * 0.9), 2.4, 0.3),
+			Offset = at(signX, LOT_HEIGHT + 5, LOT_FRONT_Z + 4),
+			Color = LOT_SIGN_COLOR,
+			FaceStreet = true,
+			Label = signLabel,
+		},
 	}
+
+	local bushes = math.floor(width / 10)
+	for i = 1, bushes do
+		local x = lot.Left + width * (i - 0.5) / bushes
+		table.insert(parts, { Name = "Bush" .. i, Size = Vector3.new(2.6, 2, 2.6), Offset = at(x, LOT_HEIGHT + 0.8, planterZ), Color = BUSH_COLOR })
+	end
+
+	-- Two street lamps along the back, heads leaning toward the street.
+	for i, fraction in ipairs({ 0.25, 0.75 }) do
+		local x = lot.Left + width * fraction
+		local z = LOT_BACK_Z - 3
+		table.insert(parts, { Name = "Lamp" .. i .. "Pole", Size = Vector3.new(0.5, 9, 0.5), Offset = at(x, LOT_HEIGHT, z), Color = POLE_COLOR })
+		table.insert(parts, { Name = "Lamp" .. i .. "Arm", Size = Vector3.new(0.4, 0.4, 2), Offset = at(x, LOT_HEIGHT + 8.6, z - 1), Color = POLE_COLOR })
+		table.insert(parts, { Name = "Lamp" .. i .. "Head", Size = Vector3.new(1.6, 0.5, 1.2), Offset = at(x, LOT_HEIGHT + 8.3, z - 2), Color = LAMP_COLOR })
+	end
+	return parts
+end
+
+local function lotCenterButton(lot: { Left: number, Right: number }, origin: Vector3): Vector3
+	return Vector3.new((lot.Left + lot.Right) / 2, 0, (LOT_BACK_Z + LOT_FRONT_Z) / 2) - origin
+end
+
+--[[
+	Cooler cart fleet spots, left of the first cart, on the Parking Lot. Each
+	spot's painted lines arrive with that spot's cart upgrade.
+	Spot centers are cart-relative X; parked carts sit at LOT_PARK_Z.
+	Cart-relative Y 0 is the asphalt top (the cart's Placement is lifted).
+]]
+local LOT_SPOTS = { -8, -16, -24 }
+local LOT_SPOT_WIDTH = 8
+local SPOT_BACK_Z = 6
+local LOT_PARK_Z = 1.5
+local LOT_LINE_FRONT_Z = -2
+
+local function spotLineParts(spot: number)
+	local x = LOT_SPOTS[spot]
+	local half = LOT_SPOT_WIDTH / 2
+	local lineLength = SPOT_BACK_Z - LOT_LINE_FRONT_Z - 0.4
+	local lineZ = (SPOT_BACK_Z + LOT_LINE_FRONT_Z) / 2
+	local function line(name: string, lineX: number)
+		return { Name = name, Size = Vector3.new(0.4, 0.05, lineLength), Offset = Vector3.new(lineX, 0, lineZ), Color = LINE_COLOR }
+	end
+
+	local parts = { line("LineLeft", x - half + 0.2) }
 	if spot == 1 then
 		table.insert(parts, line("LineRight", x + half - 0.2))
 	end
@@ -229,10 +299,209 @@ end
 
 local function parkedCartVisual(prefix: string, spot: number)
 	return {
-		Parts = lotSegmentParts(spot),
+		Parts = spotLineParts(spot),
 		-- The client drives these off and back on each sale (decoration only).
-		DepartingParts = cartParts(prefix, LOT_SPOTS[spot], LOT_HEIGHT, LOT_PARK_Z, true, true),
+		DepartingParts = cartParts(prefix, LOT_SPOTS[spot], 0, LOT_PARK_Z, true, true),
 	}
+end
+
+--[[
+	Parlor land, right of the stand: a cleared dirt lot, roped off, with a
+	sign and a lumber pile. Tier 4's building steps will go here.
+
+	Backed against the plot's right edge (half-width = Plots.Width/2 = 140),
+	inset from the street so there's a strip of grass between the road and the
+	lot. Front faces the sidewalk (the player).
+]]
+local PARLOR_LAND = {
+	Left = 22,
+	Right = 132, -- ~8 studs inside the pad edge
+	Front = 14, -- street edge is Z = -StationStreetInset (−10); leaves a gap
+	Back = 110,
+}
+local DIRT_COLOR = Color3.fromRGB(150, 115, 80)
+local STAKE_COLOR = Color3.fromRGB(240, 240, 235)
+local ROPE_COLOR = Color3.fromRGB(255, 150, 40)
+local LUMBER_COLOR = Color3.fromRGB(200, 160, 105)
+
+local function parlorLandParts()
+	local left, right = PARLOR_LAND.Left + 0.5, PARLOR_LAND.Right - 0.5
+	local front, back = PARLOR_LAND.Front + 0.5, PARLOR_LAND.Back - 0.5
+	local width = PARLOR_LAND.Right - PARLOR_LAND.Left
+	local depth = PARLOR_LAND.Back - PARLOR_LAND.Front
+	local centerX = (PARLOR_LAND.Left + PARLOR_LAND.Right) / 2
+	local centerZ = (PARLOR_LAND.Front + PARLOR_LAND.Back) / 2
+	local ropeY = LOT_HEIGHT + 2.4
+
+	local parts = {
+		{
+			Name = "Dirt",
+			Size = Vector3.new(width, LOT_HEIGHT, depth),
+			Offset = Vector3.new(centerX, 0, centerZ),
+			Color = DIRT_COLOR,
+		},
+		-- Rope on the back and sides; the street-facing front stays open toward the player.
+		{ Name = "RopeBack", Size = Vector3.new(right - left, 0.2, 0.2), Offset = Vector3.new(centerX, ropeY, back), Color = ROPE_COLOR },
+		{ Name = "RopeLeft", Size = Vector3.new(0.2, 0.2, back - front), Offset = Vector3.new(left, ropeY, centerZ), Color = ROPE_COLOR },
+		{ Name = "RopeRight", Size = Vector3.new(0.2, 0.2, back - front), Offset = Vector3.new(right, ropeY, centerZ), Color = ROPE_COLOR },
+		{ Name = "SignPost", Size = Vector3.new(0.5, 3.5, 0.5), Offset = Vector3.new(centerX, LOT_HEIGHT, front + 2.5), Color = LUMBER_COLOR },
+		{
+			Name = "SignBoard",
+			Size = Vector3.new(18, 3.5, 0.3),
+			Offset = Vector3.new(centerX, LOT_HEIGHT + 3.5, front + 2.5),
+			Color = Color3.fromRGB(230, 80, 120),
+			FaceStreet = true,
+			Label = "{Player}'s Parlor - Coming Soon",
+		},
+	}
+	for i, corner in ipairs({ { left, front }, { right, front }, { left, back }, { right, back } }) do
+		table.insert(parts, { Name = "Stake" .. i, Size = Vector3.new(0.6, 3, 0.6), Offset = Vector3.new(corner[1], LOT_HEIGHT, corner[2]), Color = STAKE_COLOR })
+	end
+	for i = 1, 3 do
+		table.insert(parts, {
+			Name = "Lumber" .. i,
+			Size = Vector3.new(7, 0.5, 1),
+			Offset = Vector3.new(right - 7, LOT_HEIGHT + (i - 1) * 0.5, back - 5 + (i % 2) * 0.3),
+			Color = LUMBER_COLOR,
+		})
+	end
+	return parts
+end
+
+--[[
+	Tier 3 ice cream truck, parked nose-to-street on the Ice Cream Truck Lot.
+	Geometry is in truck space: origin = the truck's footprint center on the
+	asphalt, X across (serving window on +X, facing the kiosk), Z along the
+	truck (cab and nose at −Z, toward the street).
+
+	Old Truck (bought on the cooler cart) is the rusty base. Every tier-3
+	upgrade fixes it up by covering an old piece with a new one that fully
+	contains it (paint shell over the rusty body, new tires over the flats),
+	so nothing has to be removed. Pieces that must stay visible (grille,
+	window hole) poke out past the paint shell.
+
+	The station Counter is a small kiosk beside the truck, not the truck: the
+	whole truck (every piece tagged TRUCK_DEPART, driver included) drives off
+	toward the street on a sale and comes back, while the kiosk and its panel
+	stay put.
+]]
+local TRUCK_ORIGIN = Vector3.new(-84, LOT_HEIGHT, 2)
+local TRUCK_COUNTER = Vector3.new(9, 0, 4)
+local TRUCK_PLACEMENT = TRUCK_ORIGIN + TRUCK_COUNTER
+
+-- Every truck piece moves as one group, driven by the truck station's sales.
+-- Cooldown keeps the lone truck parked most of the time.
+local TRUCK_DEPART = {
+	Group = "Truck",
+	Station = "IceCreamTruck",
+	-- Truck is 18 long: far enough to roll its nose into the street.
+	Distance = 22,
+	Cooldown = 15,
+}
+
+local OLD_BODY_COLOR = Color3.fromRGB(150, 140, 120)
+local OLD_CAB_COLOR = Color3.fromRGB(130, 120, 105)
+local RUST_COLOR = Color3.fromRGB(140, 85, 50)
+local TIRE_COLOR = Color3.fromRGB(35, 35, 38)
+local DARK_COLOR = Color3.fromRGB(25, 25, 30)
+local TRUCK_CREAM = Color3.fromRGB(250, 245, 235)
+local TRUCK_PINK = Color3.fromRGB(255, 140, 180)
+local CHROME_COLOR = Color3.fromRGB(200, 200, 205)
+
+-- A visual part placed in truck space, offset relative to its owning station.
+local function truckPart(owner: Vector3, name: string, size: Vector3, at: Vector3, color: Color3, extra: { [string]: any }?)
+	local part = { Name = name, Size = size, Offset = TRUCK_ORIGIN + at - owner, Color = color }
+	for key, value in pairs(extra or {}) do
+		part[key] = value
+	end
+	return part
+end
+
+local function truckPoint(owner: Vector3, at: Vector3): Vector3
+	return TRUCK_ORIGIN + at - owner
+end
+
+-- Pieces that ride along when the truck drives off.
+local function truckVisual(parts: { any })
+	return { DepartingParts = parts, Depart = TRUCK_DEPART }
+end
+
+local WHEEL_SPOTS = {
+	{ "FL", -3.6, -5 },
+	{ "FR", 3.6, -5 },
+	{ "BL", -3.6, 7 },
+	{ "BR", 3.6, 7 },
+}
+-- Cab windshield pillars (corners of the open window band).
+local PILLAR_SPOTS = { { -3.7, -7.7 }, { 3.7, -7.7 }, { -3.7, -2.3 }, { 3.7, -2.3 } }
+
+local function oldTruckParts(owner: Vector3)
+	local parts = {
+		truckPart(owner, "Chassis", Vector3.new(7, 0.6, 18), Vector3.new(0, 1, 1), Color3.fromRGB(50, 50, 55)),
+		truckPart(owner, "Body", Vector3.new(8, 8, 12), Vector3.new(0, 1.6, 4), OLD_BODY_COLOR),
+		-- Cab is open above the dash so the driver shows through.
+		truckPart(owner, "CabLower", Vector3.new(8, 3.4, 6), Vector3.new(0, 1.6, -5), OLD_CAB_COLOR),
+		truckPart(owner, "CabRoof", Vector3.new(8, 0.6, 6), Vector3.new(0, 7.6, -5), OLD_CAB_COLOR),
+		truckPart(owner, "Grille", Vector3.new(5, 1.6, 0.3), Vector3.new(0, 2.4, -8.15), DARK_COLOR),
+		truckPart(owner, "SteeringWheel", Vector3.new(1.6, 1.6, 0.3), Vector3.new(-1.8, 4.6, -7), DARK_COLOR),
+		truckPart(owner, "WindowHole", Vector3.new(0.5, 3.4, 5.5), Vector3.new(4, 4.4, 4), DARK_COLOR),
+		truckPart(owner, "RustBody", Vector3.new(8.1, 2, 3), Vector3.new(0, 2.4, 8), RUST_COLOR),
+		truckPart(owner, "RustCab", Vector3.new(8.1, 1.4, 2), Vector3.new(0, 2.2, -4), RUST_COLOR),
+	}
+	for i, spot in ipairs(PILLAR_SPOTS) do
+		table.insert(parts, truckPart(owner, "Pillar" .. i, Vector3.new(0.6, 2.6, 0.6), Vector3.new(spot[1], 5, spot[2]), OLD_CAB_COLOR))
+	end
+	for _, wheel in ipairs(WHEEL_SPOTS) do
+		table.insert(parts, truckPart(owner, "FlatTire" .. wheel[1], Vector3.new(1, 2, 3), Vector3.new(wheel[2], 0, wheel[3]), TIRE_COLOR))
+	end
+	return parts
+end
+
+local function truckPaintParts(owner: Vector3)
+	local parts = {
+		truckPart(owner, "BodyPaint", Vector3.new(8.2, 8.2, 12.2), Vector3.new(0, 1.5, 4), TRUCK_CREAM),
+		truckPart(owner, "CabLowerPaint", Vector3.new(8.2, 3.6, 6.2), Vector3.new(0, 1.5, -5), TRUCK_PINK),
+		truckPart(owner, "CabRoofPaint", Vector3.new(8.2, 0.8, 6.2), Vector3.new(0, 7.5, -5), TRUCK_PINK),
+		truckPart(owner, "Stripe", Vector3.new(8.4, 1, 12.4), Vector3.new(0, 3, 4), TRUCK_PINK),
+	}
+	for i, spot in ipairs(PILLAR_SPOTS) do
+		table.insert(parts, truckPart(owner, "PillarPaint" .. i, Vector3.new(0.8, 2.8, 0.8), Vector3.new(spot[1], 4.9, spot[2]), TRUCK_PINK))
+	end
+	return parts
+end
+
+local function truckTireParts(owner: Vector3)
+	local parts = {}
+	for _, wheel in ipairs(WHEEL_SPOTS) do
+		table.insert(parts, truckPart(owner, "Tire" .. wheel[1], Vector3.new(1.3, 3.4, 3.4), Vector3.new(wheel[2], 0, wheel[3]), TIRE_COLOR))
+		table.insert(parts, truckPart(owner, "Hubcap" .. wheel[1], Vector3.new(1.4, 1.6, 1.6), Vector3.new(wheel[2], 0.9, wheel[3]), CHROME_COLOR))
+	end
+	return parts
+end
+
+local function truckWindowParts(owner: Vector3)
+	local parts = {
+		truckPart(owner, "Frame", Vector3.new(0.6, 4, 6.3), Vector3.new(4, 4.1, 4), Color3.fromRGB(230, 90, 140)),
+		truckPart(owner, "Opening", Vector3.new(0.1, 3.4, 5.5), Vector3.new(4.35, 4.4, 4), DARK_COLOR),
+		truckPart(owner, "Awning", Vector3.new(3, 0.5, 7), Vector3.new(5.3, 8.3, 4), TRUCK_PINK),
+	}
+	for i, z in ipairs({ 1.5, 4, 6.5 }) do
+		table.insert(parts, truckPart(owner, "AwningStripe" .. i, Vector3.new(3.02, 0.52, 1), Vector3.new(5.3, 8.29, z), TRUCK_CREAM))
+	end
+	return parts
+end
+
+local function truckLightParts(owner: Vector3)
+	local colors = { Color3.fromRGB(255, 90, 90), Color3.fromRGB(255, 220, 80), Color3.fromRGB(90, 200, 255), Color3.fromRGB(120, 230, 120) }
+	local parts = {}
+	for side, x in ipairs({ -4.3, 4.3 }) do
+		table.insert(parts, truckPart(owner, "Wire" .. side, Vector3.new(0.1, 0.1, 12.4), Vector3.new(x, 9.6, 4), DARK_COLOR))
+		for i = 1, 10 do
+			local z = -2 + (i - 0.5) * 12 / 10
+			table.insert(parts, truckPart(owner, "Bulb" .. side .. "_" .. i, Vector3.new(0.4, 0.5, 0.4), Vector3.new(x, 9.1, z), colors[(i - 1) % #colors + 1]))
+		end
+	end
+	return parts
 end
 
 -- Client-only decoration: carts from Visual.DepartingParts drive toward the
@@ -248,7 +517,7 @@ TycoonConfig.CartTraffic = {
 }
 
 --[[
-	Tier ladder. Tiers 1–2 are real; later entries are placeholders.
+	Tier ladder. Tiers 1–3 are real; later entries are placeholders.
 	Each station's employee automates it; its Cost should sit next to, and
 	roughly equal, the next tier's UnlockCost.
 
@@ -375,6 +644,33 @@ TycoonConfig.Stations = {
 					},
 				},
 			},
+			-- Gate step for tier 2: no income effect; the Cooler Cart unlock
+			-- requires it. Cheap so it's a quick stop, not a wall.
+			{
+				Id = "ParkingLot",
+				DisplayName = "Parking Lot",
+				Cost = 2500,
+				Requires = { "BiggerCooler" },
+				-- Lot center; well away from the Cooler Cart unlock button that
+				-- replaces it, so stepping off this one can't buy the cart too.
+				ButtonOffset = lotCenterButton(PARKING_LOT, Vector3.zero),
+				Visual = { Parts = lotSectionParts(PARKING_LOT, Vector3.zero, PARKING_LOT.Right - 0.5, "PARKING", PARKING_LOT.Right - 2) },
+			},
+			-- Ground for tier 4 (parlor), right of the stand. No income effect;
+			-- the parlor's building steps will require it once tier 4 exists.
+			{
+				Id = "ParlorLand",
+				DisplayName = "Parlor Land",
+				Subtitle = "parlor coming soon",
+				Cost = 25000,
+				Requires = { "Cashier" },
+				ButtonOffset = Vector3.new(
+					(PARLOR_LAND.Left + PARLOR_LAND.Right) / 2,
+					0,
+					(PARLOR_LAND.Front + PARLOR_LAND.Back) / 2
+				),
+				Visual = { Parts = parlorLandParts() },
+			},
 		},
 	},
 	--[[
@@ -389,8 +685,10 @@ TycoonConfig.Stations = {
 		-- = Cashier cost. Appears with the Cashier (after Bigger Cooler), so
 		-- the player sees this path before buying the Cashier.
 		UnlockCost = 10000,
-		UnlockRequires = { "BiggerCooler" },
-		Placement = Vector3.new(-26, 0, 0),
+		-- Parking Lot needs Bigger Cooler, so the cart path still shows before the Cashier.
+		UnlockRequires = { "ParkingLot" },
+		-- Stands on the Parking Lot asphalt.
+		Placement = COOLER_CART_PLACEMENT,
 		Counter = { Size = CART_BODY_SIZE, Color = CART_BODY_COLOR },
 		Decor = cartParts("Cart1", 0, 0, 0, false, false),
 		BasePayout = 150,
@@ -450,19 +748,174 @@ TycoonConfig.Stations = {
 					},
 				},
 			},
+			-- Gate step for tier 3: extends the Parking Lot left for the trucks.
+			-- No income effect; the Ice Cream Truck unlock requires it.
+			{
+				Id = "TruckLot",
+				DisplayName = "Ice Cream Truck Lot",
+				Subtitle = "trucks coming soon",
+				Cost = 10000,
+				-- After Second Cart so tier 2 gets played before the truck path opens.
+				Requires = { "SecondCart" },
+				ButtonOffset = lotCenterButton(TRUCK_LOT, COOLER_CART_PLACEMENT),
+				Visual = { Parts = lotSectionParts(TRUCK_LOT, COOLER_CART_PLACEMENT, TRUCK_LOT.Left + 0.5, "TRUCKS", TRUCK_LOT.Left + 3) },
+			},
+			-- Second gate step for tier 3: a rusty, flat-tired truck on the new
+			-- lot. No income effect; the Ice Cream Truck unlock requires it.
+			{
+				Id = "OldTruck",
+				DisplayName = "Old Truck",
+				Subtitle = "fixer-upper",
+				Cost = 15000,
+				Requires = { "TruckLot" },
+				ButtonOffset = truckPoint(COOLER_CART_PLACEMENT, Vector3.zero),
+				-- Owned by the cooler cart, but drives off on the truck's sales (TRUCK_DEPART).
+				Visual = truckVisual(oldTruckParts(COOLER_CART_PLACEMENT)),
+			},
 		},
 	},
-	-- Placeholder so the employee-cost ≈ next-unlock rule is visible. No Placement = not built.
+	--[[
+		Tier 3: the Old Truck, fixed up one piece at a time. Unlocking it opens
+		a little order kiosk beside the truck (kiosk = Counter, umbrella,
+		cardboard OPEN sign) so it sells manually right away; each upgrade
+		replaces a shabby truck piece with a proper ice cream truck part.
+		Driver automates (partway) and rides in the cab.
+	]]
 	{
 		Id = "IceCreamTruck",
 		DisplayName = "Ice Cream Truck",
-		UnlockCost = 40000,
-		UnlockRequires = { "SecondCart" },
 		-- = Cart Manager cost.
+		UnlockCost = 40000,
+		UnlockRequires = { "OldTruck" },
+		Placement = TRUCK_PLACEMENT,
+		Counter = { Size = Vector3.new(3, 3, 4), Color = TRUCK_PINK },
+		Decor = {
+			truckPart(TRUCK_PLACEMENT, "CounterTop", Vector3.new(3.4, 0.3, 4.4), Vector3.new(9, 3, 4), TRUCK_CREAM),
+			truckPart(TRUCK_PLACEMENT, "UmbrellaPole", Vector3.new(0.3, 5.5, 0.3), Vector3.new(9, 3.3, 5), TRUCK_CREAM),
+			truckPart(TRUCK_PLACEMENT, "Umbrella", Vector3.new(5, 0.4, 5), Vector3.new(9, 8.8, 5), TRUCK_PINK),
+			truckPart(TRUCK_PLACEMENT, "UmbrellaTop", Vector3.new(2, 0.4, 2), Vector3.new(9, 9.2, 5), TRUCK_CREAM),
+			truckPart(TRUCK_PLACEMENT, "Freezer", Vector3.new(2, 2, 2), Vector3.new(9, 0, 7.5), Color3.fromRGB(225, 235, 250)),
+			truckPart(TRUCK_PLACEMENT, "OpenSign", Vector3.new(2, 1, 0.1), Vector3.new(9, 1.6, 1.9), Color3.fromRGB(190, 150, 100), {
+				FaceStreet = true,
+				Label = "OPEN",
+			}),
+		},
 		BasePayout = 2000,
 		BaseDuration = 6,
 		Upgrade = {
 			BaseCost = 4000,
+			CostGrowth = 1.6,
+			PayoutGrowth = 1.25,
+		},
+		-- Buttons stand on the asphalt next to where each piece will appear.
+		Physical = {
+			{
+				Id = "FreshPaint",
+				DisplayName = "Fresh Paint",
+				Cost = 60000,
+				PayoutMultiplier = 1.5,
+				ButtonOffset = truckPoint(TRUCK_PLACEMENT, Vector3.new(-7, 0, 6)),
+				Visual = truckVisual(truckPaintParts(TRUCK_PLACEMENT)),
+			},
+			{
+				Id = "NewTires",
+				DisplayName = "New Tires",
+				Cost = 120000,
+				PayoutMultiplier = 1.5,
+				ButtonOffset = truckPoint(TRUCK_PLACEMENT, Vector3.new(-7, 0, -6)),
+				Visual = truckVisual(truckTireParts(TRUCK_PLACEMENT)),
+			},
+			{
+				Id = "Driver",
+				DisplayName = "Driver",
+				-- Employee = automation. Cost ≈ next tier's UnlockCost (placeholder Parlor).
+				-- Available right after Fresh Paint, alongside New Tires.
+				Cost = 200000,
+				Automates = true,
+				Requires = { "FreshPaint" },
+				ButtonOffset = truckPoint(TRUCK_PLACEMENT, Vector3.new(-7, 0, 0)),
+				-- Stands in the cab behind the wheel (feet on the cab floor), so
+				-- he shows through the open window band and rides along.
+				Visual = {
+					ModelTemplate = "Cashier",
+					Offset = truckPoint(TRUCK_PLACEMENT, Vector3.new(-1.8, 1.6, -5.2)),
+					FaceStreet = true,
+					Depart = TRUCK_DEPART,
+				},
+			},
+			{
+				Id = "ServingWindow",
+				DisplayName = "Serving Window",
+				Cost = 400000,
+				SpeedMultiplier = 2,
+				Requires = { "NewTires" },
+				ButtonOffset = truckPoint(TRUCK_PLACEMENT, Vector3.new(6.5, 0, -1)),
+				Visual = truckVisual(truckWindowParts(TRUCK_PLACEMENT)),
+			},
+			{
+				Id = "Speakers",
+				DisplayName = "Jingle Speakers",
+				Cost = 800000,
+				PayoutMultiplier = 1.5,
+				ButtonOffset = truckPoint(TRUCK_PLACEMENT, Vector3.new(0, 0, -12)),
+				-- Roof front, horns pointing at the street.
+				Visual = truckVisual({
+					truckPart(TRUCK_PLACEMENT, "RoofRack", Vector3.new(5, 0.4, 0.5), Vector3.new(0, 9.7, -1), DARK_COLOR),
+					truckPart(TRUCK_PLACEMENT, "SpeakerL", Vector3.new(1.6, 1.6, 2), Vector3.new(-1.8, 10.1, -1), CHROME_COLOR),
+					truckPart(TRUCK_PLACEMENT, "SpeakerR", Vector3.new(1.6, 1.6, 2), Vector3.new(1.8, 10.1, -1), CHROME_COLOR),
+				}),
+			},
+			{
+				Id = "MenuBoard",
+				DisplayName = "Menu Board",
+				Cost = 1500000,
+				PayoutMultiplier = 1.5,
+				ButtonOffset = truckPoint(TRUCK_PLACEMENT, Vector3.new(12, 0, 1)),
+				-- On the kiosk front (stays when the truck leaves), over the cardboard OPEN sign.
+				Visual = {
+					Parts = {
+						truckPart(TRUCK_PLACEMENT, "Menu", Vector3.new(2.6, 2, 0.3), Vector3.new(9, 0.8, 1.8), Color3.fromRGB(40, 30, 45), {
+							FaceStreet = true,
+							Label = "MENU",
+						}),
+					},
+				},
+			},
+			{
+				Id = "GiantCone",
+				DisplayName = "Giant Cone",
+				Cost = 3000000,
+				PayoutMultiplier = 2,
+				ButtonOffset = truckPoint(TRUCK_PLACEMENT, Vector3.new(0, 0, 13)),
+				Visual = truckVisual({
+					truckPart(TRUCK_PLACEMENT, "Cone", Vector3.new(2, 3.2, 2), Vector3.new(0, 9.7, 7), Color3.fromRGB(215, 165, 95)),
+					truckPart(TRUCK_PLACEMENT, "Scoop", Vector3.new(3.2, 2.4, 3.2), Vector3.new(0, 12.9, 7), TRUCK_PINK),
+					truckPart(TRUCK_PLACEMENT, "TopScoop", Vector3.new(2.6, 1.8, 2.6), Vector3.new(0, 15.3, 7), Color3.fromRGB(160, 235, 200)),
+					truckPart(TRUCK_PLACEMENT, "Cherry", Vector3.new(0.8, 0.8, 0.8), Vector3.new(0, 17.1, 7), Color3.fromRGB(220, 30, 50)),
+				}),
+			},
+			{
+				Id = "StringLights",
+				DisplayName = "String Lights",
+				Cost = 6000000,
+				PayoutMultiplier = 2,
+				ButtonOffset = truckPoint(TRUCK_PLACEMENT, Vector3.new(-7, 0, 12)),
+				Visual = truckVisual(truckLightParts(TRUCK_PLACEMENT)),
+			},
+		},
+	},
+	-- Placeholder so the employee-cost ≈ next-unlock rule is visible. No Placement = not built.
+	-- Will build on the stand's Parlor Land.
+	{
+		Id = "Parlor",
+		DisplayName = "Parlor",
+		-- = Driver cost.
+		UnlockCost = 200000,
+		UnlockRequires = { "Driver" },
+		BasePayout = 20000,
+		BaseDuration = 10,
+		Upgrade = {
+			BaseCost = 40000,
 			CostGrowth = 1.6,
 			PayoutGrowth = 1.25,
 		},
