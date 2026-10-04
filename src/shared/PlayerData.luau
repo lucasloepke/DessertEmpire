@@ -4,16 +4,22 @@ local TycoonConfig = require(script.Parent.TycoonConfig)
 
 local PlayerData = {}
 
-PlayerData.CurrentVersion = 1
+-- v2: stations[id] = { unlocked, level, owned = { [physicalUpgradeId] = true } }
+-- v1 had { unlocked, toolLevel, automated }; sanitize migrates it.
+PlayerData.CurrentVersion = 2
+
+local function defaultStation(isStarter: boolean)
+	return {
+		unlocked = isStarter,
+		level = 0,
+		owned = {},
+	}
+end
 
 function PlayerData.createDefault()
 	local stations = {}
 	for index, stationConfig in ipairs(TycoonConfig.Stations) do
-		stations[stationConfig.Id] = {
-			unlocked = index == 1,
-			toolLevel = 0,
-			automated = false,
-		}
+		stations[stationConfig.Id] = defaultStation(index == 1)
 	end
 
 	return {
@@ -24,27 +30,38 @@ function PlayerData.createDefault()
 	}
 end
 
-local function sanitizeStation(stationId: string, raw: any, isStarter: boolean)
+local function wholeNonNegative(value: any): number?
+	if typeof(value) ~= "number" or value ~= value or value < 0 then
+		return nil
+	end
+	return math.floor(value)
+end
+
+local function sanitizeStation(stationConfig: any, raw: any, isStarter: boolean)
+	local station = defaultStation(isStarter)
 	if typeof(raw) ~= "table" then
-		return {
-			unlocked = isStarter,
-			toolLevel = 0,
-			automated = false,
-		}
+		return station
 	end
 
-	local toolLevel = raw.toolLevel
-	if typeof(toolLevel) ~= "number" or toolLevel ~= toolLevel or toolLevel < 0 then
-		toolLevel = 0
-	else
-		toolLevel = math.floor(toolLevel)
+	if typeof(raw.unlocked) == "boolean" then
+		station.unlocked = raw.unlocked
 	end
 
-	return {
-		unlocked = if typeof(raw.unlocked) == "boolean" then raw.unlocked else isStarter,
-		toolLevel = toolLevel,
-		automated = if typeof(raw.automated) == "boolean" then raw.automated else false,
-	}
+	-- v1 toolLevel carries over as panel upgrade levels.
+	station.level = wholeNonNegative(raw.level) or wholeNonNegative(raw.toolLevel) or 0
+
+	-- Only keep ids that still exist in config.
+	local rawOwned = if typeof(raw.owned) == "table" then raw.owned else {}
+	for _, upgrade in ipairs(stationConfig.Physical) do
+		if rawOwned[upgrade.Id] == true then
+			station.owned[upgrade.Id] = true
+		elseif upgrade.Automates and raw.automated == true then
+			-- v1 automation → own the employee.
+			station.owned[upgrade.Id] = true
+		end
+	end
+
+	return station
 end
 
 -- Coerce a loaded blob into a known-good table. Never invent cash from thin air
@@ -56,28 +73,20 @@ function PlayerData.sanitize(raw: any)
 
 	local data = PlayerData.createDefault()
 
-	if typeof(raw.cash) == "number" and raw.cash == raw.cash and raw.cash >= 0 then
-		data.cash = math.floor(raw.cash)
+	data.cash = wholeNonNegative(raw.cash) or data.cash
+
+	local lastSeen = wholeNonNegative(raw.lastSeen)
+	if lastSeen and lastSeen > 0 then
+		data.lastSeen = lastSeen
 	end
 
-	if typeof(raw.lastSeen) == "number" and raw.lastSeen == raw.lastSeen and raw.lastSeen > 0 then
-		data.lastSeen = math.floor(raw.lastSeen)
-	end
-
-	local rawStations = raw.stations
-	if typeof(rawStations) == "table" then
-		for index, stationConfig in ipairs(TycoonConfig.Stations) do
-			data.stations[stationConfig.Id] = sanitizeStation(
-				stationConfig.Id,
-				rawStations[stationConfig.Id],
-				index == 1
-			)
-		end
+	local rawStations = if typeof(raw.stations) == "table" then raw.stations else {}
+	for index, stationConfig in ipairs(TycoonConfig.Stations) do
+		data.stations[stationConfig.Id] = sanitizeStation(stationConfig, rawStations[stationConfig.Id], index == 1)
 	end
 
 	-- Starter station must always be unlocked.
-	local starterId = TycoonConfig.Stations[1].Id
-	data.stations[starterId].unlocked = true
+	data.stations[TycoonConfig.Stations[1].Id].unlocked = true
 
 	data.version = PlayerData.CurrentVersion
 	return data

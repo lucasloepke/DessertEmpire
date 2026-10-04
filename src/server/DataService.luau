@@ -132,6 +132,16 @@ function DataService.addCash(player: Player, amount: number)
 	DataService.setCash(player, session.data.cash + amount)
 end
 
+-- Deducts only if the player can afford it. Returns whether it was spent.
+function DataService.trySpend(player: Player, amount: number): boolean
+	local session = sessions[player]
+	if not session or amount < 0 or session.data.cash < amount then
+		return false
+	end
+	DataService.setCash(player, session.data.cash - amount)
+	return true
+end
+
 --[[
 	Load order result:
 	- success + data → session is saveable

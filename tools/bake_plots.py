@@ -31,6 +31,9 @@ PLOT = dict(
     StreetHalfWidth=40,
     PadHeight=1,
     PadY=3,
+    # Vacant pads match the grass baseplate; runtime flips to Claimed on assign.
+    VacantColor=(75, 154, 68),
+    ClaimedColor=(220, 200, 160),
 )
 ROAD = dict(
     YOffset=0.05,
@@ -41,6 +44,20 @@ ROAD = dict(
 def studs():
     return {
         s: "Studs"
+        for s in (
+            "TopSurface",
+            "BottomSurface",
+            "LeftSurface",
+            "RightSurface",
+            "FrontSurface",
+            "BackSurface",
+        )
+    }
+
+
+def smooth():
+    return {
+        s: "Smooth"
         for s in (
             "TopSurface",
             "BottomSurface",
@@ -74,16 +91,17 @@ def cframe(pos, yaw_degrees: float = 0.0):
     ]
 
 
-def part_props(color, size, pos, yaw_degrees: float = 0.0, **extra):
-    return {
+def part_props(color, size, pos, yaw_degrees: float = 0.0, material: str = "Plastic", surfaces=None, **extra):
+    props = {
         "Anchored": True,
-        "Material": "Plastic",
+        "Material": material,
         "Color": [round(c / 255, 5) for c in color],
         "Size": [float(size[0]), float(size[1]), float(size[2])],
         "CFrame": cframe(pos, yaw_degrees),
-        **studs(),
+        **(surfaces if surfaces is not None else studs()),
         **extra,
     }
+    return props
 
 
 def find_road_export() -> Path | None:
@@ -286,7 +304,7 @@ def build_plots_tree(road_segments_path: Path | None):
                 CanCollide=False,
                 Duration=0,
                 Neutral=True,
-                Enabled=True,
+                Enabled=False,
                 Transparency=1,
             ),
         },
@@ -311,7 +329,13 @@ def build_plots_tree(road_segments_path: Path | None):
             CN: "Model",
             "Pad": {
                 CN: "Part",
-                PR: part_props((220, 200, 160), (PLOT["Width"], PLOT["PadHeight"], depth), (x, PLOT["PadY"], zc)),
+                PR: part_props(
+                    PLOT["VacantColor"],
+                    (PLOT["Width"], PLOT["PadHeight"], depth),
+                    (x, PLOT["PadY"], zc),
+                    material="Grass",
+                    surfaces=smooth(),
+                ),
             },
             "Spawn": {
                 CN: "SpawnLocation",
@@ -322,7 +346,7 @@ def build_plots_tree(road_segments_path: Path | None):
                     yaw_degrees=180,
                     CanCollide=False,
                     Duration=0,
-                    Neutral=False,
+                    Neutral=True,
                     Enabled=False,
                     Transparency=1,
                 ),
@@ -339,7 +363,13 @@ def build_plots_tree(road_segments_path: Path | None):
             CN: "Model",
             "Pad": {
                 CN: "Part",
-                PR: part_props((200, 190, 170), (PLOT["Width"], PLOT["PadHeight"], depth), (x, PLOT["PadY"], zc)),
+                PR: part_props(
+                    PLOT["VacantColor"],
+                    (PLOT["Width"], PLOT["PadHeight"], depth),
+                    (x, PLOT["PadY"], zc),
+                    material="Grass",
+                    surfaces=smooth(),
+                ),
             },
             "Spawn": {
                 CN: "SpawnLocation",
@@ -350,7 +380,7 @@ def build_plots_tree(road_segments_path: Path | None):
                     yaw_degrees=0,
                     CanCollide=False,
                     Duration=0,
-                    Neutral=False,
+                    Neutral=True,
                     Enabled=False,
                     Transparency=1,
                 ),

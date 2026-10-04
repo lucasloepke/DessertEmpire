@@ -1,15 +1,9 @@
-local Players = game:GetService("Players")
+local Audio = require(script.Audio)
+local HologramVisibility = require(script.HologramVisibility)
+local Hud = require(script.Hud)
+local StationPanel = require(script.StationPanel)
 
-local player = Players.LocalPlayer
-
--- Cash is replicated via the Cash player attribute (server-authoritative).
--- Full HUD / station panel comes later.
-local function onCashChanged()
-	local cash = player:GetAttribute("Cash")
-	if typeof(cash) == "number" then
-		print(string.format("[TycoonHud] Cash: $%d", cash))
-	end
-end
-
-player:GetAttributeChangedSignal("Cash"):Connect(onCashChanged)
-onCashChanged()
+Hud.start()
+Audio.start()
+HologramVisibility.start()
+StationPanel.start(Audio.playSale)

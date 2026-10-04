@@ -21,6 +21,35 @@ type PlotRecord = {
 local plotsByIndex: { [number]: PlotRecord } = {}
 local plotsByPlayer: { [Player]: PlotRecord } = {}
 
+local function studsAllAround(part: BasePart)
+	part.TopSurface = Enum.SurfaceType.Studs
+	part.BottomSurface = Enum.SurfaceType.Studs
+	part.LeftSurface = Enum.SurfaceType.Studs
+	part.RightSurface = Enum.SurfaceType.Studs
+	part.FrontSurface = Enum.SurfaceType.Studs
+	part.BackSurface = Enum.SurfaceType.Studs
+end
+
+local function smoothAllAround(part: BasePart)
+	part.TopSurface = Enum.SurfaceType.Smooth
+	part.BottomSurface = Enum.SurfaceType.Smooth
+	part.LeftSurface = Enum.SurfaceType.Smooth
+	part.RightSurface = Enum.SurfaceType.Smooth
+	part.FrontSurface = Enum.SurfaceType.Smooth
+	part.BackSurface = Enum.SurfaceType.Smooth
+end
+
+local function applyPadAppearance(pad: BasePart, claimed: boolean)
+	local look = if claimed then TycoonConfig.Plots.Claimed else TycoonConfig.Plots.Vacant
+	pad.Color = look.Color
+	pad.Material = look.Material
+	if claimed then
+		studsAllAround(pad)
+	else
+		smoothAllAround(pad)
+	end
+end
+
 local function registerPlot(model: Model)
 	local indexStr = string.match(model.Name, PLOT_NAME_PATTERN)
 	if not indexStr then
@@ -53,7 +82,12 @@ local function registerPlot(model: Model)
 
 	model.PrimaryPart = pad
 	spawn.Enabled = false
-	spawn.Neutral = false
+	-- Must be Neutral for RespawnLocation / LoadCharacter to honor it when
+	-- the player has no matching TeamColor (otherwise HubSpawn wins).
+	spawn.Neutral = true
+	applyPadAppearance(pad, false)
+	model:SetAttribute("OwnerUserId", nil)
+	model:SetAttribute("OwnerName", nil)
 
 	plotsByIndex[index] = {
 		index = index,
@@ -63,6 +97,22 @@ local function registerPlot(model: Model)
 		side = side,
 		owner = nil,
 	}
+end
+
+local function getHubSpawn(): SpawnLocation?
+	local folder = Workspace:FindFirstChild("Plots")
+	if not (folder and folder:IsA("Folder")) then
+		return nil
+	end
+	local street = folder:FindFirstChild("Street")
+	if not (street and street:IsA("Model")) then
+		return nil
+	end
+	local hub = street:FindFirstChild("HubSpawn")
+	if hub and hub:IsA("SpawnLocation") then
+		return hub
+	end
+	return nil
 end
 
 --[[
@@ -102,7 +152,54 @@ function PlotService.init()
 		))
 	end
 
+	-- Hub is fallback-only; keep it off so it cannot steal RespawnLocation.
+	local hub = getHubSpawn()
+	if hub then
+		hub.Enabled = false
+		hub.Neutral = true
+	end
+
 	print(string.format("[PlotService] Registered %d plots from place file.", found))
+end
+
+function PlotService.getSpawnForPlayer(player: Player): SpawnLocation?
+	local record = plotsByPlayer[player]
+	return if record then record.spawn else nil
+end
+
+--[[
+	Place the character at their plot spawn (or hub). Call after LoadCharacter
+	so spawn is correct even if RespawnLocation was ignored.
+]]
+function PlotService.moveCharacterToPlot(player: Player)
+	local character = player.Character
+	if not character then
+		return
+	end
+
+	local spawn = PlotService.getSpawnForPlayer(player) or getHubSpawn()
+	if not spawn then
+		return
+	end
+
+	local root = character:WaitForChild("HumanoidRootPart", 5)
+	if not root then
+		return
+	end
+
+	-- Stand on top of the spawn brick, facing its LookVector (into the plot).
+	local target = spawn.CFrame + Vector3.new(0, 3, 0)
+	character:PivotTo(target)
+end
+
+function PlotService.useHubSpawn(player: Player)
+	local hub = getHubSpawn()
+	if not hub then
+		return
+	end
+	hub.Enabled = true
+	hub.Neutral = true
+	player.RespawnLocation = hub
 end
 
 function PlotService.getPlotCount(): number
@@ -147,6 +244,8 @@ function PlotService.assign(player: Player): Model?
 	free.owner = player
 	plotsByPlayer[player] = free
 	free.spawn.Enabled = true
+	free.spawn.Neutral = true
+	applyPadAppearance(free.pad, true)
 	free.model:SetAttribute("OwnerUserId", player.UserId)
 	free.model:SetAttribute("OwnerName", player.Name)
 
@@ -176,6 +275,8 @@ function PlotService.release(player: Player)
 
 	record.owner = nil
 	record.spawn.Enabled = false
+	record.spawn.Neutral = true
+	applyPadAppearance(record.pad, false)
 	record.model:SetAttribute("OwnerUserId", nil)
 	record.model:SetAttribute("OwnerName", nil)
 	plotsByPlayer[player] = nil
