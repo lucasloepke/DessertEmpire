@@ -26,7 +26,10 @@ local function corner(parent: GuiObject, radius: UDim)
 	c.Parent = parent
 end
 
-function Hud.start()
+function Hud.start(options: {
+	isMusicMuted: (() -> boolean)?,
+	toggleMusicMute: (() -> boolean)?,
+}?)
 	local player = Players.LocalPlayer
 	local playerGui = player:WaitForChild("PlayerGui", 10)
 	assert(playerGui, "Missing PlayerGui")
@@ -76,6 +79,38 @@ function Hud.start()
 	amount.Font = Enum.Font.GothamBold
 	amount.Parent = frame
 	stroke(amount, 2)
+
+	if options and options.toggleMusicMute and options.isMusicMuted then
+		local mute = Instance.new("TextButton")
+		mute.Name = "MuteMusic"
+		mute.AnchorPoint = Vector2.new(1, 1)
+		mute.Position = UDim2.new(1, -16, 1, -16)
+		mute.Size = UDim2.fromOffset(52, 52)
+		mute.BackgroundColor3 = Color3.fromRGB(30, 30, 36)
+		mute.BackgroundTransparency = 0.1
+		mute.AutoButtonColor = true
+		mute.Text = "♪"
+		mute.TextColor3 = Color3.new(1, 1, 1)
+		mute.TextSize = 26
+		mute.Font = Enum.Font.GothamBold
+		mute.Parent = gui
+		corner(mute, UDim.new(0, 12))
+		stroke(mute, 2.5, Enum.ApplyStrokeMode.Border)
+
+		local function refreshMute()
+			local muted = options.isMusicMuted()
+			mute.Text = if muted then "OFF" else "♪"
+			mute.TextSize = if muted then 16 else 26
+			mute.TextTransparency = if muted then 0.15 else 0
+			mute.BackgroundColor3 = if muted then Color3.fromRGB(55, 40, 40) else Color3.fromRGB(30, 30, 36)
+		end
+
+		mute.Activated:Connect(function()
+			options.toggleMusicMute()
+			refreshMute()
+		end)
+		refreshMute()
+	end
 
 	local function popGain(gain: number)
 		local popup = Instance.new("TextLabel")

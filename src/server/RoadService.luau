@@ -151,7 +151,9 @@ function RoadService.tileAlongStreet()
 
 	local step = math.max(tileLength - cfg.Overlap, tileLength * 0.5)
 	local streetLength = pavement.Size.X
-	local y = pavement.Position.Y + pavement.Size.Y / 2 + cfg.YOffset + size.Y / 2
+	local y = if typeof(cfg.Y) == "number"
+		then cfg.Y + cfg.YOffset
+		else pavement.Position.Y + pavement.Size.Y / 2 + cfg.YOffset + size.Y / 2
 
 	local folder = ensureEmptySegmentsFolder(street)
 	folder:ClearAllChildren()

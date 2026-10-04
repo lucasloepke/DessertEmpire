@@ -44,7 +44,7 @@ local function textLabel(parent: Instance, name: string, y: number, height: numb
 	return l
 end
 
-function StationPanel.start(onSale: (BasePart) -> ())
+function StationPanel.start(onSale: (BasePart) -> (), onUpgrade: ((BasePart) -> ())?)
 	local player = Players.LocalPlayer
 	local panelCfg = TycoonConfig.Interact.Panel
 
@@ -157,13 +157,13 @@ function StationPanel.start(onSale: (BasePart) -> ())
 
 	local stand: Model? = nil
 	local counter: BasePart? = nil
-	local saleConnection: RBXScriptConnection? = nil
+	local standConnections: { RBXScriptConnection } = {}
 
 	local function setStand(newStand: Instance?)
-		if saleConnection then
-			saleConnection:Disconnect()
-			saleConnection = nil
+		for _, connection in standConnections do
+			connection:Disconnect()
 		end
+		table.clear(standConnections)
 		stand, counter = nil, nil
 		gui.Adornee = nil
 
@@ -177,15 +177,32 @@ function StationPanel.start(onSale: (BasePart) -> ())
 		stand, counter = newStand, c
 		gui.Adornee = c
 
-		-- Only count increases, so the initial 0 on join doesn't play a sale.
-		local lastCount = newStand:GetAttribute("SaleCount") or 0
-		saleConnection = newStand:GetAttributeChangedSignal("SaleCount"):Connect(function()
-			local count = newStand:GetAttribute("SaleCount") or 0
-			if count > lastCount then
-				onSale(c)
-			end
-			lastCount = count
-		end)
+		-- Only count increases, so the initial 0 on join doesn't play a sound.
+		local lastSaleCount = newStand:GetAttribute("SaleCount") or 0
+		table.insert(
+			standConnections,
+			newStand:GetAttributeChangedSignal("SaleCount"):Connect(function()
+				local count = newStand:GetAttribute("SaleCount") or 0
+				if count > lastSaleCount then
+					onSale(c)
+				end
+				lastSaleCount = count
+			end)
+		)
+
+		if onUpgrade then
+			local lastUpgradeCount = newStand:GetAttribute("UpgradeCount") or 0
+			table.insert(
+				standConnections,
+				newStand:GetAttributeChangedSignal("UpgradeCount"):Connect(function()
+					local count = newStand:GetAttribute("UpgradeCount") or 0
+					if count > lastUpgradeCount then
+						onUpgrade(c)
+					end
+					lastUpgradeCount = count
+				end)
+			)
+		end
 	end
 
 	local function bindStationValue(child: Instance)

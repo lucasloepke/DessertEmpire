@@ -30,13 +30,16 @@ PLOT = dict(
     Gap=40,
     StreetHalfWidth=40,
     PadHeight=1,
-    PadY=3,
+    # Pad center Y so the pad bottom sits on the grass top (Y=0).
+    PadY=0.5,
     # Vacant pads match the grass baseplate; runtime flips to Claimed on assign.
     VacantColor=(75, 154, 68),
     ClaimedColor=(220, 200, 160),
 )
 ROAD = dict(
-    YOffset=0.05,
+    # World Y for the road WorldPivot (export pivot = pavement top).
+    Y=0.25,
+    YOffset=0.0,
     Overlap=0.25,
 )
 
@@ -210,7 +213,7 @@ def offset_cframes(item: ET.Element, dx: float, dy: float, dz: float) -> None:
             comps["Z"].text = str(float(comps["Z"].text or 0) + dz)
 
 
-def bake_road_segments_rbxmx(export_path: Path, meta: dict, street_length: float, pavement_y: float) -> Path:
+def bake_road_segments_rbxmx(export_path: Path, meta: dict, street_length: float) -> Path:
     """Build assets/RoadSegments.rbxmx — a Folder of positioned road copies."""
     src_tree = ET.parse(export_path)
     src_root = src_tree.getroot()
@@ -252,9 +255,9 @@ def bake_road_segments_rbxmx(export_path: Path, meta: dict, street_length: float
                 for prop in ch:
                     if _local_name(prop.tag) == "string" and prop.get("name") == "Name":
                         prop.text = f"Road_{count + 1:02d}"
-        # Keep exported height (already sits on the street); only re-center X/Z onto the street line.
+        # Re-center X/Z onto the street line; seat Y at Road.Y (pavement top).
         dx = x - origin_x
-        dy = 0.0
+        dy = ROAD["Y"] + ROAD["YOffset"] - origin_y
         dz = 0.0 - origin_z
         offset_cframes(clone, dx, dy, dz)
         folder.append(clone)
@@ -284,14 +287,18 @@ def build_plots_tree(road_segments_path: Path | None):
     if road_segments_path is not None:
         pavement_extra["Transparency"] = 1
 
+    # Street collision: bottom on grass (Y=0), top at Road.Y so the road sits flush.
+    street_height = ROAD["Y"]
+    street_y = ROAD["Y"] / 2
+
     street = {
         CN: "Model",
         "Pavement": {
             CN: "Part",
             PR: part_props(
                 (70, 70, 75),
-                (street_len, PLOT["PadHeight"], street_depth),
-                (0, PLOT["PadY"], 0),
+                (street_len, street_height, street_depth),
+                (0, street_y, 0),
                 **pavement_extra,
             ),
         },
@@ -299,8 +306,8 @@ def build_plots_tree(road_segments_path: Path | None):
             CN: "SpawnLocation",
             PR: part_props(
                 (163, 162, 165),
-                (8, 1, 8),
-                (0, PLOT["PadY"], 0),
+                (8, street_height, 8),
+                (0, street_y, 0),
                 CanCollide=False,
                 Duration=0,
                 Neutral=True,
@@ -429,7 +436,6 @@ def main():
             export_path,
             meta,
             street_len,
-            pavement_y=PLOT["PadY"],
         )
 
     plots, street_len, xs = build_plots_tree(road_segments_path)
@@ -437,7 +443,8 @@ def main():
     needed = max(span + 200, PLOT["StreetHalfWidth"] * 2 + PLOT["Depth"] * 2 + 200)
     base_size = max(2048, int((needed // 256) + 1) * 256)
     base_height = 20
-    grass_top_y = -4
+    # Baseplate top at Y=0; pads/road sit on top of it.
+    grass_top_y = 0
     base_center_y = grass_top_y - base_height / 2
 
     CN, PR = "$className", "$properties"

@@ -62,18 +62,20 @@ TycoonConfig.Interact = {
 }
 
 --[[
-	Sounds. Roblox ships no cha-ching or music as built-in rbxasset:// files,
-	so these need Creator Store audio ids ("rbxassetid://123"). A wrong id
-	fails silently in-engine, so the client warns when a sound fails to load.
+	Sounds. Asset ids come from Workspace.Sounds (Studio reference copies).
+	A wrong id fails silently in-engine, so the client warns on load failure.
+	Sale / upgrade play at the station part so they fade with distance.
 ]]
 TycoonConfig.Audio = {
-	-- Placeholder blip (verified built-in) until a cha-ching id is chosen.
-	SaleSoundId = "rbxasset://sounds/volume_slider.ogg",
+	SaleSoundId = "rbxassetid://120891770644830", -- cash-register-sound-fx
 	SaleVolume = 0.6,
 	SalePitchJitter = 0.05,
 	SaleRollOffMaxDistance = 60,
-	-- Empty = no music. Paste a Creator Store audio id here.
-	MusicId = "",
+	UpgradeSoundId = "rbxassetid://136917641181040", -- minecraft-door-open
+	UpgradeVolume = 0.55,
+	UpgradeRollOffMaxDistance = 60,
+	-- Alternate chill track: rbxassetid://139132289200391 (Tender Static)
+	MusicId = "rbxassetid://114330241320274", -- Dew
 	MusicVolume = 0.25,
 }
 
@@ -158,7 +160,8 @@ TycoonConfig.Plots = {
 	Gap = 40,
 	StreetHalfWidth = 40, -- Z extent of the street from map center
 	PadHeight = 1,
-	PadY = 3, -- street/plot tops sit above grass (grass top is below 0)
+	-- Pad center Y so the pad bottom sits on the grass top (Y=0).
+	PadY = 0.5,
 	-- Vacant pads match the grass baseplate so taken lots read clearly from the street.
 	Vacant = {
 		Color = Color3.fromRGB(75, 154, 68),
@@ -173,8 +176,10 @@ TycoonConfig.Plots = {
 -- Creator Store road mesh/model named "Road" in Workspace is tiled along the street.
 TycoonConfig.Road = {
 	TemplateName = "Road",
+	-- World Y for the road pivot (export pivot = pavement top).
+	Y = 0.25,
 	-- Lift slightly above the grey pavement so meshes don't z-fight.
-	YOffset = 0.05,
+	YOffset = 0,
 	-- Overlap tiles a hair so seams don't show gaps.
 	Overlap = 0.25,
 }

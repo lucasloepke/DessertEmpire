@@ -83,6 +83,10 @@ completeCycle = function(player: Player, state: State)
 	end
 end
 
+local function noteUpgrade(state: State)
+	state.stand:SetAttribute("UpgradeCount", (state.stand:GetAttribute("UpgradeCount") or 0) + 1)
+end
+
 local function buyPanelUpgrade(player: Player, state: State, station: any)
 	local cost = StationMath.upgradeCost(state.config, station.level)
 	if not DataService.trySpend(player, cost) then
@@ -91,6 +95,7 @@ local function buyPanelUpgrade(player: Player, state: State, station: any)
 	station.level += 1
 	DataService.markDirty(player)
 	syncAttributes(state, station)
+	noteUpgrade(state)
 end
 
 local function onStationAction(player: Player, action: any, stationId: any)
@@ -143,6 +148,7 @@ local function buyNextPhysical(player: Player, state: State): boolean
 	DataService.markDirty(player)
 	syncAttributes(state, station)
 	StandService.refresh(player)
+	noteUpgrade(state)
 
 	-- A running manual cycle chains into automation when it completes.
 	if upgrade.Automates and not state.busy then
@@ -240,6 +246,7 @@ function StationService.attach(player: Player, stand: Model)
 
 	stand:SetAttribute("DisplayName", config.DisplayName)
 	stand:SetAttribute("SaleCount", 0)
+	stand:SetAttribute("UpgradeCount", 0)
 	stand:SetAttribute("CycleStartedAt", 0)
 	stand:SetAttribute("CycleEndsAt", 0)
 	syncAttributes(state, station)

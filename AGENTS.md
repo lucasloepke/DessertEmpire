@@ -169,8 +169,8 @@ Numbers live in `TycoonConfig.Plots` (keep `tools/bake_plots.py` in sync):
 | Pad size | **280 × 400** | Width (X) × Depth (Z); ~5× the original 56×80 starters |
 | Gap between pads | 40 | |
 | Street half-width | 40 | Full street depth = 80 on Z |
-| Pad Y | 3 | Street/pads sit above grass |
-| Grass baseplate | 2048×2048, top at Y≈−4 | Material Grass; no separate hub grass pad |
+| Pad Y | 0.5 | Pad center; bottoms sit on grass top (Y=0) |
+| Grass baseplate | 2048×2048, top at Y=0 | Material Grass; no separate hub grass pad |
 | Hub spawn | `Plots.Street.HubSpawn` | Invisible Neutral SpawnLocation on the street |
 
 Each plot Model: `Pad` (Part), `Spawn` (SpawnLocation at street edge, disabled until owned), `Side` (`North`/`South`).
