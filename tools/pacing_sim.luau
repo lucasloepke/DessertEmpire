@@ -49,7 +49,8 @@ end
 local function clicked(): any
 	local best, bestRate = nil, -1
 	for _, config in ipairs(built()) do
-		if not StationMath.isAutomated(config, data.stations[config.Id]) and rate(config) > bestRate then
+		local station = data.stations[config.Id]
+		if StationMath.isOpen(config, station) and not StationMath.isAutomated(config, station) and rate(config) > bestRate then
 			best, bestRate = config, rate(config)
 		end
 	end
@@ -60,7 +61,8 @@ local function income(): number
 	local total = 0
 	local manual = clicked()
 	for _, config in ipairs(built()) do
-		if config == manual or StationMath.isAutomated(config, data.stations[config.Id]) then
+		local station = data.stations[config.Id]
+		if StationMath.isOpen(config, station) and (config == manual or StationMath.isAutomated(config, station)) then
 			total += rate(config)
 		end
 	end
@@ -71,12 +73,14 @@ local function options()
 	local list = {}
 	for _, config in ipairs(built()) do
 		local station = data.stations[config.Id]
-		table.insert(list, {
-			cost = StationMath.upgradeCost(config, station.level),
-			buy = function()
-				station.level += 1
-			end,
-		})
+		if StationMath.isOpen(config, station) then
+			table.insert(list, {
+				cost = StationMath.upgradeCost(config, station.level),
+				buy = function()
+					station.level += 1
+				end,
+			})
+		end
 		for _, upgrade in ipairs(StationMath.availablePhysical(config, station)) do
 			table.insert(list, {
 				cost = upgrade.Cost,
@@ -132,7 +136,7 @@ while t < MAX_TIME and remaining() > 0 do
 	local manual = clicked()
 	for _, config in ipairs(built()) do
 		local station = data.stations[config.Id]
-		if config == manual or StationMath.isAutomated(config, station) then
+		if StationMath.isOpen(config, station) and (config == manual or StationMath.isAutomated(config, station)) then
 			progress[config.Id] = (progress[config.Id] or 0) + DT
 			local duration = StationMath.duration(config, station)
 			while progress[config.Id] >= duration do

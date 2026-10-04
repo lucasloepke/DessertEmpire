@@ -41,6 +41,11 @@ function StationMath.upgradeCost(config: any, level: number): number
 	return math.floor(config.Upgrade.BaseCost * config.Upgrade.CostGrowth ^ level + 0.5)
 end
 
+-- A station with OpensWith can't sell (or take panel upgrades) until it owns that upgrade.
+function StationMath.isOpen(config: any, station: any): boolean
+	return config.OpensWith == nil or station.owned[config.OpensWith] == true
+end
+
 function StationMath.isAutomated(config: any, station: any): boolean
 	for _, upgrade in ipairs(config.Physical) do
 		if upgrade.Automates and station.owned[upgrade.Id] then
@@ -92,7 +97,8 @@ end
 
 --[[
 	The next tier this station offers to unlock, or nil. Offered once this
-	station is unlocked, owns every UnlockRequires id, and the next tier is
+	station is unlocked, owns every UnlockRequires id (plus every
+	UnlockRequiresOn id on the stations named there), and the next tier is
 	still locked and buildable (has a Placement).
 	data = the player's whole save.
 ]]
@@ -118,6 +124,14 @@ function StationMath.nextUnlock(config: any, data: any)
 			return nil
 		end
 	end
+	for otherId, ids in pairs(nextConfig.UnlockRequiresOn or {}) do
+		local other = data.stations[otherId]
+		for _, id in ipairs(ids) do
+			if not (other and other.owned[id] == true) then
+				return nil
+			end
+		end
+	end
 	return nextConfig
 end
 
@@ -136,6 +150,11 @@ function StationMath.describeEffect(config: any, upgrade: any): string
 	for _, entry in ipairs(TycoonConfig.Stations) do
 		if table.find(entry.UnlockRequires or {}, upgrade.Id) then
 			return "unlocks " .. entry.DisplayName
+		end
+		for _, ids in pairs(entry.UnlockRequiresOn or {}) do
+			if table.find(ids, upgrade.Id) then
+				return "unlocks " .. entry.DisplayName
+			end
 		end
 	end
 	return ""

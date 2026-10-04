@@ -91,14 +91,23 @@ function PlayerData.sanitize(raw: any)
 	-- Starter station must always be unlocked.
 	data.stations[TycoonConfig.Stations[1].Id].unlocked = true
 
-	-- An unlocked tier implies its UnlockRequires on the previous station are
-	-- owned (saves from before a gate step like Parking Lot was added).
+	-- An unlocked tier implies its UnlockRequires on the previous station (and
+	-- UnlockRequiresOn elsewhere) are owned (saves from before a gate step like
+	-- Parking Lot was added).
 	for index = 2, #TycoonConfig.Stations do
 		local config = TycoonConfig.Stations[index]
 		if data.stations[config.Id].unlocked then
 			local previous = data.stations[TycoonConfig.Stations[index - 1].Id]
 			for _, id in ipairs(config.UnlockRequires or {}) do
 				previous.owned[id] = true
+			end
+			for otherId, ids in pairs(config.UnlockRequiresOn or {}) do
+				local other = data.stations[otherId]
+				if other then
+					for _, id in ipairs(ids) do
+						other.owned[id] = true
+					end
+				end
 			end
 		end
 	end

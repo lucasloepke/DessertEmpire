@@ -47,13 +47,14 @@ local function syncAttributes(state: State, station: any)
 	state.stand:SetAttribute("Level", station.level)
 	state.stand:SetAttribute("UpgradeCost", StationMath.upgradeCost(config, station.level))
 	state.stand:SetAttribute("Automated", StationMath.isAutomated(config, station))
+	state.stand:SetAttribute("Open", StationMath.isOpen(config, station))
 end
 
 local completeCycle: (Player, State) -> ()
 
 local function beginCycle(player: Player, state: State)
 	local station = stationData(player, state.config.Id)
-	if not station then
+	if not station or not StationMath.isOpen(state.config, station) then
 		return
 	end
 
@@ -117,7 +118,7 @@ local function onStationAction(player: Player, action: any, stationId: any)
 	end
 
 	local station = stationData(player, stationId)
-	if not station or not station.unlocked then
+	if not station or not station.unlocked or not StationMath.isOpen(state.config, station) then
 		return
 	end
 
@@ -327,7 +328,7 @@ function StationService.attach(player: Player, stand: Model)
 		end
 	end)
 
-	if StationMath.isAutomated(config, station) then
+	if StationMath.isAutomated(config, station) and StationMath.isOpen(config, station) then
 		beginCycle(player, state)
 	end
 end

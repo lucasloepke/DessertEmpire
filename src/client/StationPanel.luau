@@ -5,6 +5,8 @@
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
+local TweenService = game:GetService("TweenService")
+local UserInputService = game:GetService("UserInputService")
 local Workspace = game:GetService("Workspace")
 
 local Shared = ReplicatedStorage:WaitForChild("Shared", 10)
@@ -79,6 +81,35 @@ function StationPanel.start(onSale: (BasePart) -> (), onUpgrade: ((BasePart) -> 
 	canvas.Size = UDim2.fromScale(1, 1)
 	canvas.GroupTransparency = 1
 	canvas.Parent = gui
+
+	local uiScale = Instance.new("UIScale")
+	uiScale.Scale = 1
+	uiScale.Parent = canvas
+
+	local throbToken = 0
+	local function throbPanel()
+		if not gui.Enabled then
+			return
+		end
+		throbToken += 1
+		local token = throbToken
+		local peak = panelCfg.ThrobScale or 1.14
+		local hop = panelCfg.ThrobHop or 0.55
+		local baseOffset = panelCfg.StudsOffset
+		uiScale.Scale = 1
+		gui.StudsOffsetWorldSpace = baseOffset
+		local upInfo = TweenInfo.new(panelCfg.ThrobUp or 0.07, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
+		local downInfo = TweenInfo.new(panelCfg.ThrobDown or 0.16, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+		TweenService:Create(uiScale, upInfo, { Scale = peak }):Play()
+		TweenService:Create(gui, upInfo, { StudsOffsetWorldSpace = baseOffset + Vector3.new(0, hop, 0) }):Play()
+		task.delay(panelCfg.ThrobUp or 0.07, function()
+			if token ~= throbToken then
+				return
+			end
+			TweenService:Create(uiScale, downInfo, { Scale = 1 }):Play()
+			TweenService:Create(gui, downInfo, { StudsOffsetWorldSpace = baseOffset }):Play()
+		end)
+	end
 
 	local title = textLabel(canvas, "Title", 0, 28, 24, Color3.new(1, 1, 1))
 	local payout = textLabel(canvas, "Payout", 28, 36, 32, Color3.fromRGB(90, 235, 100))
@@ -198,6 +229,9 @@ function StationPanel.start(onSale: (BasePart) -> (), onUpgrade: ((BasePart) -> 
 			child:GetAttributeChangedSignal("SaleCount"):Connect(function()
 				local count = child:GetAttribute("SaleCount") or 0
 				if count > lastSaleCount then
+					if child == stand then
+						throbPanel()
+					end
 					onSale(c)
 				end
 				lastSaleCount = count
@@ -211,6 +245,9 @@ function StationPanel.start(onSale: (BasePart) -> (), onUpgrade: ((BasePart) -> 
 				child:GetAttributeChangedSignal("UpgradeCount"):Connect(function()
 					local count = child:GetAttribute("UpgradeCount") or 0
 					if count > lastUpgradeCount then
+						if child == stand then
+							throbPanel()
+						end
 						onUpgrade(c)
 					end
 					lastUpgradeCount = count
@@ -261,14 +298,43 @@ function StationPanel.start(onSale: (BasePart) -> (), onUpgrade: ((BasePart) -> 
 	end
 	player.ChildAdded:Connect(bindPlotValue)
 
-	bar.Activated:Connect(function()
-		if not stand or stand:GetAttribute("Automated") == true then
+	local holdingSell = false
+	local lastSellRequestAt = 0
+
+	local function trySell()
+		if not holdingSell or not stand then
 			return
 		end
-		if Workspace:GetServerTimeNow() < (stand:GetAttribute("CycleEndsAt") or 0) then
+		if stand:GetAttribute("Automated") == true then
 			return
 		end
+		local now = Workspace:GetServerTimeNow()
+		if now < (stand:GetAttribute("CycleEndsAt") or 0) then
+			return
+		end
+		-- One request per idle window; wait for the server to start the cycle.
+		if now - lastSellRequestAt < 0.05 then
+			return
+		end
+		lastSellRequestAt = now
 		stationAction:FireServer("Sell", stand:GetAttribute("StationId"))
+	end
+
+	bar.MouseButton1Down:Connect(function()
+		holdingSell = true
+		trySell()
+	end)
+	bar.MouseButton1Up:Connect(function()
+		holdingSell = false
+	end)
+	-- Release outside the bar (mouse drag-off / touch ended elsewhere).
+	UserInputService.InputEnded:Connect(function(input: InputObject)
+		if
+			input.UserInputType == Enum.UserInputType.MouseButton1
+			or input.UserInputType == Enum.UserInputType.Touch
+		then
+			holdingSell = false
+		end
 	end)
 
 	-- Client pre-check is cosmetic; the server re-checks affordability.
@@ -291,9 +357,12 @@ function StationPanel.start(onSale: (BasePart) -> (), onUpgrade: ((BasePart) -> 
 		if root and root:IsA("BasePart") then
 			local nearest, nearestDistance = nil, TycoonConfig.StationInteractDistance
 			for model, entry in tracked do
-				local distance = (root.Position - entry.counter.Position).Magnitude
-				if distance <= nearestDistance then
-					nearest, nearestDistance = model, distance
+				-- OpensWith stations stay silent until that upgrade is owned.
+				if model:GetAttribute("Open") ~= false then
+					local distance = (root.Position - entry.counter.Position).Magnitude
+					if distance <= nearestDistance then
+						nearest, nearestDistance = model, distance
+					end
 				end
 			end
 			-- Keep the last stand while fading out so the panel doesn't blank mid-fade.
@@ -304,6 +373,10 @@ function StationPanel.start(onSale: (BasePart) -> (), onUpgrade: ((BasePart) -> 
 			near = nearest ~= nil
 		end
 
+		if not near then
+			holdingSell = false
+		end
+
 		local target = if near then 0 else 1
 		transparency += (target - transparency) * math.clamp(dt * panelCfg.FadeSpeed, 0, 1)
 		canvas.GroupTransparency = transparency
@@ -312,6 +385,8 @@ function StationPanel.start(onSale: (BasePart) -> (), onUpgrade: ((BasePart) -> 
 		if not (stand and gui.Enabled) then
 			return
 		end
+
+		trySell()
 
 		title.Text = string.upper(stand:GetAttribute("DisplayName") or stand.Name)
 		payout.Text = Format.cash(stand:GetAttribute("Payout") or 0)

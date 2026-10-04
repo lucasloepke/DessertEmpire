@@ -43,11 +43,8 @@ local function applyPadAppearance(pad: BasePart, claimed: boolean)
 	local look = if claimed then TycoonConfig.Plots.Claimed else TycoonConfig.Plots.Vacant
 	pad.Color = look.Color
 	pad.Material = look.Material
-	if claimed then
-		studsAllAround(pad)
-	else
-		smoothAllAround(pad)
-	end
+	-- Grass reads wrong with studs; keep pads smooth either way.
+	smoothAllAround(pad)
 end
 
 local function registerPlot(model: Model)

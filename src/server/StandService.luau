@@ -73,6 +73,11 @@ local function toWorld(frame: PlotFrame, offset: Vector3, height: number, face: 
 		return CFrame.lookAt(worldPos, worldPos + Vector3.new(0, 0, -sign))
 	elseif face == "Employee" then
 		return CFrame.lookAt(worldPos, worldPos + Vector3.new(0, 0, sign))
+	elseif face == "Left" then
+		-- Stand-space −X (toward the stand from the parlor).
+		return CFrame.lookAt(worldPos, worldPos + Vector3.new(-sign, 0, 0))
+	elseif face == "Right" then
+		return CFrame.lookAt(worldPos, worldPos + Vector3.new(sign, 0, 0))
 	end
 	return CFrame.new(worldPos)
 end
@@ -89,12 +94,161 @@ local function faceFromVisual(visual: any): string?
 	if visual.FaceStreet == true then
 		return "Street"
 	end
+	if visual.FaceLeft == true then
+		return "Left"
+	end
+	if visual.FaceRight == true then
+		return "Right"
+	end
 	return nil
+end
+
+-- ClearedBy = "StationId" once that station is unlocked, or
+-- "StationId/UpgradeId" once that upgrade is owned. Site clutter on the
+-- parlor land / foundation uses this so ropes and cones leave as it builds.
+local function isCleared(clearedBy: any, data: any): boolean
+	if typeof(clearedBy) ~= "string" or not data then
+		return false
+	end
+	local slash = string.find(clearedBy, "/", 1, true)
+	local stationId = if slash then string.sub(clearedBy, 1, slash - 1) else clearedBy
+	local upgradeId = if slash then string.sub(clearedBy, slash + 1) else nil
+	local station = data.stations[stationId]
+	if not (station and station.unlocked) then
+		return false
+	end
+	if upgradeId == nil or upgradeId == "" then
+		return true
+	end
+	return station.owned[upgradeId] == true
+end
+
+local function applyClearedBy(record: StandRecord, data: any)
+	for _, descendant in ipairs(record.model:GetDescendants()) do
+		if isCleared(descendant:GetAttribute("ClearedBy"), data) then
+			descendant:Destroy()
+		end
+	end
 end
 
 local function buttonCFrame(frame: PlotFrame, offset: Vector3): CFrame
 	local buttonHeight = TycoonConfig.Interact.Button.BaseHeight
 	return toWorld(frame, offset, buttonHeight) + Vector3.new(0, 0.02, 0)
+end
+
+local function grassTemplate(): BasePart?
+	local name = TycoonConfig.PlotGrass.TemplateName
+	local template = ReplicatedStorage:FindFirstChild(name)
+	local workspaceCopy = Workspace:FindFirstChild(name)
+	-- Prefer ReplicatedStorage; hide any world-placed template so it doesn't
+	-- sit in the map (Studio often leaves the source MeshPart in Workspace).
+	if workspaceCopy and workspaceCopy:IsA("BasePart") then
+		if not (template and template:IsA("BasePart")) then
+			workspaceCopy.Parent = ReplicatedStorage
+			template = workspaceCopy
+		else
+			workspaceCopy.Anchored = true
+			workspaceCopy.CanCollide = false
+			workspaceCopy.CanQuery = false
+			workspaceCopy.Transparency = 1
+			workspaceCopy.CFrame = CFrame.new(0, -500, 0)
+		end
+	end
+	if template and template:IsA("BasePart") then
+		return template
+	end
+	return nil
+end
+
+local function pointInHole(x: number, z: number, hole: any, pad: number): boolean
+	return x >= hole.MinX - pad
+		and x <= hole.MaxX + pad
+		and z >= hole.MinZ - pad
+		and z <= hole.MaxZ + pad
+end
+
+--[[
+	Scatter ReplicatedStorage.Grass tufts over a lawn region (stand-space),
+	skipping hardscape holes. No DropIn — they appear in place so the parlor
+	drop doesn't haul a hundred shrubs from the sky.
+]]
+local function scatterRegionGrass(record: StandRecord, region: any)
+	local cfg = TycoonConfig.PlotGrass
+	local template = grassTemplate()
+	if not template then
+		warn("[StandService] Missing " .. cfg.TemplateName .. " mesh (ReplicatedStorage or Workspace)")
+		return
+	end
+
+	local folder = record.model:FindFirstChild("GrassTufts")
+	if folder then
+		folder:Destroy()
+	end
+	folder = Instance.new("Folder")
+	folder.Name = "GrassTufts"
+	folder.Parent = record.model
+
+	local spacing = cfg.Spacing
+	local jitter = cfg.Jitter
+	-- Inflate holes by ~half the mesh so centers stay off hardscape edges.
+	local holePad = math.max(template.Size.X, template.Size.Z) * 0.45
+	local rng = Random.new(record.config.Id:len() * 97 + math.floor(region.MinX + region.MaxZ))
+	local index = 0
+	for x = region.MinX + spacing * 0.5, region.MaxX, spacing do
+		for z = region.MinZ + spacing * 0.5, region.MaxZ, spacing do
+			local px = x + rng:NextNumber(-jitter, jitter)
+			local pz = z + rng:NextNumber(-jitter, jitter)
+			if px < region.MinX or px > region.MaxX or pz < region.MinZ or pz > region.MaxZ then
+				continue
+			end
+			local blocked = false
+			for _, hole in ipairs(region.Holes or {}) do
+				if pointInHole(px, pz, hole, holePad) then
+					blocked = true
+					break
+				end
+			end
+			if blocked then
+				continue
+			end
+
+			index += 1
+			local tuft = template:Clone()
+			tuft.Name = "Grass" .. index
+			tuft.Anchored = true
+			tuft.CanCollide = false
+			tuft.CanTouch = false
+			tuft.CanQuery = false
+			tuft.CastShadow = false
+			local scale = rng:NextNumber(cfg.ScaleMin, cfg.ScaleMax)
+			tuft.Size = template.Size * scale
+			local yaw = rng:NextNumber(0, math.pi * 2)
+			-- Bottom on the lawn top; toWorld places by bottom-center height.
+			local world = toWorld(record.frame, Vector3.new(px, cfg.Y, pz), tuft.Size.Y)
+			tuft.CFrame = CFrame.new(world.Position) * CFrame.Angles(0, yaw, 0)
+			tuft.Parent = folder
+		end
+	end
+end
+
+local function syncPlotGrass(entry: PlayerStands, data: any)
+	local cfg = TycoonConfig.PlotGrass
+	-- Bump when hole/region layout changes so existing plots re-plant once.
+	local layoutVersion = 6
+	for _, region in ipairs(cfg.Regions or {}) do
+		local record = entry.stands[region.StationId]
+		local station = data.stations[region.StationId]
+		if record and station and station.unlocked then
+			local folder = record.model:FindFirstChild("GrassTufts")
+			if not (folder and folder:GetAttribute("Layout") == layoutVersion) then
+				scatterRegionGrass(record, region)
+				folder = record.model:FindFirstChild("GrassTufts")
+				if folder then
+					folder:SetAttribute("Layout", layoutVersion)
+				end
+			end
+		end
+	end
 end
 
 --[[
@@ -112,6 +266,15 @@ local function markDrop(instance: Instance, delay: number?)
 	CollectionService:AddTag(instance, TycoonConfig.Tags.DropIn)
 end
 
+local function smoothAllAround(part: BasePart)
+	part.TopSurface = Enum.SurfaceType.Smooth
+	part.BottomSurface = Enum.SurfaceType.Smooth
+	part.LeftSurface = Enum.SurfaceType.Smooth
+	part.RightSurface = Enum.SurfaceType.Smooth
+	part.FrontSurface = Enum.SurfaceType.Smooth
+	part.BackSurface = Enum.SurfaceType.Smooth
+end
+
 local function spawnVisualPart(parent: Instance?, name: string, visual: any, record: StandRecord, ownerName: string?)
 	local part = Instance.new("Part")
 	part.Name = name
@@ -122,8 +285,33 @@ local function spawnVisualPart(parent: Instance?, name: string, visual: any, rec
 	part.Color = visual.Color
 	part.Size = visual.Size
 	part.CFrame = stationPoint(record, visual.Offset, visual.Size.Y, faceFromVisual(visual))
-	studsAllAround(part)
+	if typeof(visual.Transparency) == "number" then
+		part.Transparency = visual.Transparency
+	end
+	if visual.CanCollide == false then
+		part.CanCollide = false
+	end
+	if typeof(visual.ClearedBy) == "string" then
+		part:SetAttribute("ClearedBy", visual.ClearedBy)
+	end
+	-- Grass / Neon look wrong with studs; everything else stays placeholder-studded.
+	if part.Material == Enum.Material.Grass or part.Material == Enum.Material.Neon then
+		smoothAllAround(part)
+	else
+		studsAllAround(part)
+	end
 	part.Parent = parent
+
+	local lightCfg = visual.PointLight
+	if typeof(lightCfg) == "table" then
+		local light = Instance.new("PointLight")
+		light.Name = "Glow"
+		light.Brightness = if typeof(lightCfg.Brightness) == "number" then lightCfg.Brightness else 2
+		light.Range = if typeof(lightCfg.Range) == "number" then lightCfg.Range else 24
+		light.Color = if typeof(lightCfg.Color) == "Color3" then lightCfg.Color else Color3.fromRGB(255, 248, 235)
+		light.Shadows = lightCfg.Shadows == true
+		light.Parent = part
+	end
 
 	if typeof(visual.Label) == "string" and visual.Label ~= "" then
 		local text = string.gsub(visual.Label, "{Player}", ownerName or "Player")
@@ -232,13 +420,25 @@ local function markDeparts(model: Model, record: StandRecord, depart: any?)
 		model:SetAttribute("DepartStation", depart.Station)
 		model:SetAttribute("DepartDistance", depart.Distance)
 		model:SetAttribute("DepartCooldown", depart.Cooldown)
+		model:SetAttribute("DepartMaxAway", depart.MaxAway)
 	end
 end
 
+local function spawnDepartingModel(parent: Instance, name: string, parts: { any }, record: StandRecord, depart: any?)
+	local vehicle = Instance.new("Model")
+	vehicle.Name = name
+	for _, partVis in ipairs(parts) do
+		spawnVisualPart(vehicle, partVis.Name, partVis, record)
+	end
+	markDeparts(vehicle, record, depart)
+	vehicle.Parent = parent
+	return vehicle
+end
+
 -- animate = just purchased (drop in from the sky); false when rebuilding on join.
-local function spawnUpgradeVisual(folder: Instance, upgrade: any, record: StandRecord, ownerName: string, animate: boolean)
+local function spawnUpgradeVisual(folder: Instance, upgrade: any, record: StandRecord, ownerName: string, animate: boolean, data: any)
 	local visual = upgrade.Visual
-	if visual.ModelTemplate or visual.Parts or visual.DepartingParts then
+	if visual.ModelTemplate or visual.Parts or visual.DepartingParts or visual.Vehicles then
 		local model = Instance.new("Model")
 		model.Name = upgrade.Id
 		if visual.ModelTemplate then
@@ -253,25 +453,29 @@ local function spawnUpgradeVisual(folder: Instance, upgrade: any, record: StandR
 		end
 		if visual.Parts then
 			for _, partVis in ipairs(visual.Parts) do
-				spawnVisualPart(model, partVis.Name, partVis, record, ownerName)
+				if not isCleared(partVis.ClearedBy, data) then
+					spawnVisualPart(model, partVis.Name, partVis, record, ownerName)
+				end
 			end
 		end
 		if visual.DepartingParts then
 			-- Separate model so the client's CartTraffic moves only these parts
 			-- (not the asphalt); they leave toward the street.
-			local cart = Instance.new("Model")
-			cart.Name = "Cart"
-			for _, partVis in ipairs(visual.DepartingParts) do
-				spawnVisualPart(cart, partVis.Name, partVis, record)
+			spawnDepartingModel(model, "Cart", visual.DepartingParts, record, visual.Depart)
+		end
+		if visual.Vehicles then
+			for index, vehicleParts in ipairs(visual.Vehicles) do
+				spawnDepartingModel(model, "Cart" .. index, vehicleParts, record, visual.Depart)
 			end
-			markDeparts(cart, record, visual.Depart)
-			cart.Parent = model
 		end
 		if animate then
 			markDrop(model)
 		end
 		model.Parent = folder
 	else
+		if isCleared(visual.ClearedBy, data) then
+			return
+		end
 		local part = spawnVisualPart(nil, upgrade.Id, visual, record, ownerName)
 		if animate then
 			markDrop(part)
@@ -282,7 +486,7 @@ end
 
 -- Add visuals for newly owned upgrades, remove ones no longer owned. Existing
 -- visuals stay put, so the employee only drops in once.
-local function syncUpgradeVisuals(record: StandRecord, station: any, ownerName: string, animate: boolean)
+local function syncUpgradeVisuals(record: StandRecord, station: any, ownerName: string, animate: boolean, data: any)
 	local folder = record.model:FindFirstChild("Upgrades")
 	if not folder then
 		folder = Instance.new("Folder")
@@ -306,7 +510,7 @@ local function syncUpgradeVisuals(record: StandRecord, station: any, ownerName: 
 				end
 			end
 			if not existing then
-				spawnUpgradeVisual(folder, upgrade, record, ownerName, animate)
+				spawnUpgradeVisual(folder, upgrade, record, ownerName, animate, data)
 			end
 		elseif existing then
 			existing:Destroy()
@@ -349,12 +553,12 @@ local function offersFor(record: StandRecord, data: any): { Offer }
 	if nextConfig then
 		table.insert(offers, {
 			name = "UnlockButton_" .. nextConfig.Id,
-			cframe = buttonCFrame(record.frame, nextConfig.Placement),
+			cframe = buttonCFrame(record.frame, nextConfig.UnlockButtonAt or nextConfig.Placement),
 			kind = "StationUnlock",
 			stationId = nextConfig.Id,
 			upgradeId = nil,
 			title = nextConfig.DisplayName,
-			subtitle = "new station",
+			subtitle = nextConfig.UnlockSubtitle or "new station",
 			cost = nextConfig.UnlockCost,
 		})
 	end
@@ -413,7 +617,7 @@ local function refreshButtons(record: StandRecord, data: any)
 	end
 end
 
-local function buildStand(entry: PlayerStands, config: any, animate: boolean): Model
+local function buildStand(entry: PlayerStands, config: any, animate: boolean, data: any): Model
 	local stand = Instance.new("Model")
 	stand.Name = config.Id
 	stand:SetAttribute("StationId", config.Id)
@@ -432,11 +636,19 @@ local function buildStand(entry: PlayerStands, config: any, animate: boolean): M
 	counter.Color = config.Counter.Color
 	counter.Size = config.Counter.Size
 	counter.CFrame = stationPoint(record, Vector3.zero, counter.Size.Y)
+	if config.Counter.Hidden == true then
+		-- Invisible panel / interact anchor; the real counter is an upgrade.
+		counter.Transparency = 1
+		counter.CanCollide = false
+		counter.CanTouch = false
+	end
 	studsAllAround(counter)
 	counter.Parent = stand
 
 	for _, decor in ipairs(config.Decor or {}) do
-		spawnVisualPart(stand, decor.Name, decor, record)
+		if not isCleared(decor.ClearedBy, data) then
+			spawnVisualPart(stand, decor.Name, decor, record)
+		end
 	end
 
 	stand.PrimaryPart = counter
@@ -457,9 +669,11 @@ function StandService.refresh(player: Player, animate: boolean?)
 		return
 	end
 	for stationId, record in pairs(entry.stands) do
-		syncUpgradeVisuals(record, data.stations[stationId], player.DisplayName, animate == true)
+		syncUpgradeVisuals(record, data.stations[stationId], player.DisplayName, animate == true, data)
+		applyClearedBy(record, data)
 		refreshButtons(record, data)
 	end
+	syncPlotGrass(entry, data)
 end
 
 --[[
@@ -496,7 +710,7 @@ function StandService.build(player: Player, plotModel: Model, data: any): { Mode
 	for _, config in ipairs(TycoonConfig.Stations) do
 		local station = data.stations[config.Id]
 		if config.Placement and station and station.unlocked then
-			table.insert(built, buildStand(entry, config, false))
+			table.insert(built, buildStand(entry, config, false, data))
 		end
 	end
 	StandService.refresh(player)
@@ -519,10 +733,11 @@ end
 function StandService.buildStation(player: Player, stationId: string): Model?
 	local entry = playerStands[player]
 	local config = StationMath.findStation(stationId)
-	if not (entry and config and config.Placement) or entry.stands[stationId] then
+	local data = DataService.get(player)
+	if not (entry and config and config.Placement and data) or entry.stands[stationId] then
 		return nil
 	end
-	local stand = buildStand(entry, config, true)
+	local stand = buildStand(entry, config, true, data)
 	StandService.refresh(player, true)
 	return stand
 end

@@ -159,7 +159,15 @@ function CartTraffic.onSale(stand: Instance)
 			awayCount += 1
 		end
 	end
-	if #vehicles == 0 or awayCount >= TycoonConfig.CartTraffic.MaxAway then
+	local maxAway = TycoonConfig.CartTraffic.MaxAway
+	for _, vehicle in ipairs(vehicles) do
+		local custom = vehicle.models[1] and vehicle.models[1]:GetAttribute("DepartMaxAway")
+		if typeof(custom) == "number" then
+			maxAway = custom
+			break
+		end
+	end
+	if #vehicles == 0 or awayCount >= maxAway then
 		return
 	end
 
